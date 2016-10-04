@@ -240,6 +240,8 @@ int main(int argc, char **argv) {
 		tf::Quaternion goalThrustRotation;
 		double goalThrust = param_throttle_min;
 
+		//TODO: Should have something to set low throttle and no movement until a certain threshold is passed for the first time
+
 		//Check to make sure there have been new commands
 		if( commandTimeout < ( ros::Time::now() - goalVelocity.header.stamp ).toSec() ) {
 			freshCommands = false;
