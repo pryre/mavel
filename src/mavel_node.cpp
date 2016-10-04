@@ -26,8 +26,6 @@
 geometry_msgs::PoseStamped currentPose;
 geometry_msgs::TwistStamped goalVelocity;
 
-bool DEBUG_MSGS;
-
 void local_pos_cb(const geometry_msgs::PoseStamped::ConstPtr& msg) {
 	currentPose = *msg;
 }
@@ -35,45 +33,7 @@ void local_pos_cb(const geometry_msgs::PoseStamped::ConstPtr& msg) {
 void cmd_vel_cb(const geometry_msgs::TwistStamped::ConstPtr& msg) {
 	goalVelocity = *msg;
 }
-/*
-geometry_msgs::Vector3 toEuler(geometry_msgs::Quaternion q) {
-    geometry_msgs::Vector3 e;
 
-    double q2sqr = q.y * q.y;
-    double t0 = -2.0 * (q2sqr + q.z * q.z) + 1.0;
-    double t1 = +2.0 * (q.x * q.y + q.w * q.z);
-    double t2 = -2.0 * (q.x * q.z - q.w * q.y);
-    double t3 = +2.0 * (q.y * q.z + q.w * q.x);
-    double t4 = -2.0 * (q.x * q.x + q2sqr) + 1.0;
-
-    t2 = t2 > 1.0 ? 1.0 : t2;
-    t2 = t2 < -1.0 ? -1.0 : t2;
-
-    e.x = atan2(t3, t4);
-    e.y = asin(t2);
-    e.z = atan2(t1, t0);
-
-    return e;
-}
-
-geometry_msgs::Quaternion toQuaternion(geometry_msgs::Vector3 e) {
-    geometry_msgs::Quaternion q;
-
-    double t0 = cos(e.z * 0.5);
-    double t1 = sin(e.z * 0.5);
-    double t2 = cos(e.x * 0.5);
-    double t3 = sin(e.x * 0.5);
-    double t4 = cos(e.y * 0.5);
-    double t5 = sin(e.y * 0.5);
-
-    q.w = t2 * t4 * t0 + t3 * t5 * t1;
-    q.x = t3 * t4 * t0 - t2 * t5 * t1;
-    q.y = t2 * t5 * t0 + t3 * t4 * t1;
-    q.z = t2 * t4 * t1 - t3 * t5 * t0;
-
-	return q;
-}
-*/
 //================================//
 // Main Function                  //
 //================================//
@@ -84,57 +44,179 @@ int main(int argc, char **argv) {
 	ros::init(argc, argv, "mavel" );
 	ros::NodeHandle nh( ros::this_node::getName() );
 
-	DEBUG_MSGS = true;
-	double loopRate = 20.0;
 	double commandTimeout = 0.1; //TODO: Params
 	bool freshCommands = false;		//The thread will be locked to only sending safety values
 	bool freshTransform = false;	//The thread will be locked to only sending safety values
 
-	//TODO: Dynamic params
-	double param_yaw_rate_ff = 10.0;
-	double param_throttle_min = 0.15;
-	double param_throttle_mid = 0.5;
-	double param_throttle_max = 0.85;
+	double param_loop_rate = 20.0;
+
+	std::string param_cmd_vel = "cmd_vel";
+	std::string param_cmd_att = "cmd_att";
+	std::string param_tf_global = "world";
+	std::string param_tf_body = "fcu/body";
+	std::string param_tf_ref = "fcu/ref";
+	std::string param_tf_goal = "fcu/goal";
+
 	double param_vel_xy_pid_p = 0.15;
 	double param_vel_xy_pid_i = 0.01;
 	double param_vel_xy_pid_d = 0.05;
 	double param_vel_xy_pid_min = -1.0;
 	double param_vel_xy_pid_max = 1.0;
+
+	double param_tilt_max = 0.39;	//22.5 Deg
+
+	double param_yaw_rate_ff = 10.0;
+
 	double param_vel_z_pid_p = 0.1;
 	double param_vel_z_pid_i = 0.1;
-	double param_vel_z_pid_d = 0.05;
-	double param_vel_z_pid_min = -(param_throttle_mid - param_throttle_min);	//Set based on the throttle settings
-	double param_vel_z_pid_max = param_throttle_max - param_throttle_mid;		//Otherwise they would just cause additional pid windup
-	double param_tilt_max = 0.39;	//22.5 Deg
-	double param_thr_max = 1.0;	//100%
+	double param_vel_z_pid_d = 0.05; //TODO: min max
+	double param_vel_z_pid_min = -0.25;
+	double param_vel_z_pid_max = 0.25;
+
+	double param_throttle_min = 0.20;
+	double param_throttle_mid = 0.5;
+	double param_throttle_max = 0.90;
+
+	//POS XY PID //================================================================
+	ROS_INFO("[Input & Output Topics]");
+
+	if( !nh.getParam( "velocity_input", param_cmd_vel ) ) {
+		ROS_WARN( "No parameter set for \"velocity_input\", using: %s", param_cmd_vel.c_str() );
+	}
+	ROS_INFO( "Listening for velocity input: %s", param_cmd_vel.c_str() );
+
+	if( !nh.getParam( "attitude_output", param_cmd_att ) ) {
+		ROS_WARN( "No parameter set for \"attitude_output\", using: %s", param_cmd_att.c_str() );
+	}
+	ROS_INFO( "Broadcasting attitude goal: %s", param_cmd_att.c_str() );
+
+	if( !nh.getParam( "global_frame", param_tf_global ) ) {
+		ROS_WARN( "No parameter set for \"global_frame\", using: %s", param_tf_global.c_str() );
+	}
+	ROS_INFO( "TF global frame: %s", param_tf_global.c_str() );
+
+	if( !nh.getParam( "body_frame", param_tf_body ) ) {
+		ROS_WARN( "No parameter set for \"body_frame\", using: %s", param_tf_body.c_str() );
+	}
+	ROS_INFO( "TF body frame: %s", param_tf_body.c_str() );
+
+	if( !nh.getParam( "body_reference", param_tf_ref ) ) {
+		ROS_WARN( "No parameter set for \"body_reference\", using: %s", param_tf_ref.c_str() );
+	}
+	ROS_INFO( "TF body reference (0 rotation) frame: %s", param_tf_ref.c_str() );
+
+	if( !nh.getParam( "body_goal", param_tf_goal ) ) {
+		ROS_WARN( "No parameter set for \"body_goal\", using: %s", param_tf_goal.c_str() );
+	}
+	ROS_INFO( "TF body goal frame: %s", param_tf_goal.c_str() );
+
+	//POS XY PID //================================================================
+	ROS_INFO("[Velocity Controller]");
+
+	if( !nh.getParam( "vel_xy_pid/p", param_vel_xy_pid_p) ) {
+		ROS_WARN( "No parameter set for \"vel_xy_pid/p\", using: %0.2f", param_vel_xy_pid_p);
+	}
+
+	if( !nh.getParam( "vel_xy_pid/i", param_vel_xy_pid_i) ) {
+		ROS_WARN( "No parameter set for \"vel_xy_pid/i\", using: %0.2f", param_vel_xy_pid_i);
+	}
+
+	if( !nh.getParam( "vel_xy_pid/d", param_vel_xy_pid_d) ) {
+		ROS_WARN( "No parameter set for \"vel_xy_pid/d\", using: %0.2f", param_vel_xy_pid_d);
+	}
+
+	if( !nh.getParam( "vel_xy_pid/min", param_vel_xy_pid_min) ) {
+		ROS_WARN( "No parameter set for \"vel_xy_pid/min\", using: %0.2f", param_vel_xy_pid_min);
+	}
+
+	if( !nh.getParam( "vel_xy_pid/max", param_vel_xy_pid_max) ) {
+		ROS_WARN( "No parameter set for \"vel_xy_pid/max\", using: %0.2f", param_vel_xy_pid_max);
+	}
+
+	ROS_INFO( "Setting vel_xy_pid to: [%0.2f, %0.2f, %0.2f; %0.2f, %0.2f]", param_vel_xy_pid_p, param_vel_xy_pid_i, param_vel_xy_pid_d, param_vel_xy_pid_min, param_vel_xy_pid_max);
+
+	//POS Z PID //================================================================
+
+	if( !nh.getParam( "throttle/min", param_throttle_min) ) {
+		ROS_WARN( "No parameter set for \"throttle/min\", using: %0.2f", param_throttle_min);
+	}
+
+	if( !nh.getParam( "throttle/mid", param_throttle_mid) ) {
+		ROS_WARN( "No parameter set for \"throttle/mid\", using: %0.2f", param_throttle_mid);
+	}
+
+	if( !nh.getParam( "throttle/max", param_throttle_max) ) {
+		ROS_WARN( "No parameter set for \"throttle/max\", using: %0.2f", param_throttle_max);
+	}
+
+	ROS_INFO( "Setting throttle to: [%0.2f, %0.2f, %0.2f]", param_throttle_min, param_throttle_mid, param_throttle_max);
+
+	if( !nh.getParam( "vel_z_pid/p", param_vel_z_pid_p) ) {
+		ROS_WARN( "No parameter set for \"pos_z_pid/p\", using: %0.2f", param_vel_z_pid_p);
+	}
+
+	if( !nh.getParam( "vel_z_pid/i", param_vel_z_pid_i) ) {
+		ROS_WARN( "No parameter set for \"pos_z_pid/i\", using: %0.2f", param_vel_z_pid_i);
+	}
+
+	if( !nh.getParam( "vel_z_pid/d", param_vel_z_pid_d) ) {
+		ROS_WARN( "No parameter set for \"pos_z_pid/d\", using: %0.2f", param_vel_z_pid_d);
+	}
+
+	param_vel_z_pid_min = -(param_throttle_mid - param_throttle_min);	//Set based on the throttle settings
+	param_vel_z_pid_max = param_throttle_max - param_throttle_mid;		//Otherwise they would just cause additional pid windup
+
+
+	ROS_INFO( "Setting vel_z_pid to: [%0.2f, %0.2f, %0.2f; %0.2f, %0.2f]", param_vel_z_pid_p, param_vel_z_pid_i, param_vel_z_pid_d, param_vel_z_pid_min, param_vel_z_pid_max);
+
+	//PARAMS //================================================================
+	ROS_INFO("[Misc. Parameters]");
+
+	if( !nh.getParam( "rate_yaw/ff", param_yaw_rate_ff) ) {
+		ROS_WARN( "No parameter set for \"rate_yaw/ff\", using: %0.2f", param_yaw_rate_ff);
+	}
+	ROS_INFO( "Setting yaw control feed forward to: %0.2f", param_yaw_rate_ff );
+
+	if( !nh.getParam( "tilt_max", param_tilt_max) ) {
+		ROS_WARN( "No parameter set for \"tilt_max\", using: %0.2f", param_tilt_max);
+	}
+	ROS_INFO( "Setting maximum roll/pitch angle (rad): %0.2f", param_tilt_max );
+
+	if( !nh.getParam( "loop_rate", param_loop_rate) ) {
+		ROS_WARN( "No parameter set for \"loop_rate\", using: %0.2f", param_loop_rate);
+	}
+	ROS_INFO( "Setting controller rate (Hz): %0.2f", param_loop_rate );
+
+
+	ROS_INFO("[Parameters Loaded]");
 
 	mavros_msgs::AttitudeTarget outputAttitude;
 	//TODO: seperate rates are not yet properly supported, just ignore all
 	outputAttitude.type_mask = outputAttitude.IGNORE_ROLL_RATE + outputAttitude.IGNORE_PITCH_RATE;	//We want to send yaw rate, but not other rates
-	outputAttitude.header.frame_id = "/fcu/goal";
+	outputAttitude.header.frame_id = param_tf_goal;
 
-	pid vel_x_pid( 1.0/loopRate, param_vel_xy_pid_p, param_vel_xy_pid_i, param_vel_xy_pid_d, param_vel_xy_pid_min, param_vel_xy_pid_max );
-	pid vel_y_pid( 1.0/loopRate, param_vel_xy_pid_p, param_vel_xy_pid_i, param_vel_xy_pid_d, param_vel_xy_pid_min, param_vel_xy_pid_max );
-	pid vel_z_pid( 1.0/loopRate, param_vel_z_pid_p, param_vel_z_pid_i, param_vel_z_pid_d, param_vel_z_pid_min, param_vel_z_pid_max);
+	pid vel_x_pid( 1.0/param_loop_rate, param_vel_xy_pid_p, param_vel_xy_pid_i, param_vel_xy_pid_d, param_vel_xy_pid_min, param_vel_xy_pid_max );
+	pid vel_y_pid( 1.0/param_loop_rate, param_vel_xy_pid_p, param_vel_xy_pid_i, param_vel_xy_pid_d, param_vel_xy_pid_min, param_vel_xy_pid_max );
+	pid vel_z_pid( 1.0/param_loop_rate, param_vel_z_pid_p, param_vel_z_pid_i, param_vel_z_pid_d, param_vel_z_pid_min, param_vel_z_pid_max);
 
 	//Subscribers
 	ros::Subscriber cmd_vel_sub = nh.subscribe<geometry_msgs::TwistStamped>
-		("cmd_vel", 10, cmd_vel_cb);
+		(param_cmd_vel, 10, cmd_vel_cb);
 
 	ros::Publisher att_pub = nh.advertise<mavros_msgs::AttitudeTarget>
-		("/mavros/setpoint_raw/attitude", 10);
+		(param_cmd_att, 10);
 
 	//Initialize TF
 	tf::TransformListener tfln;
 	tf::TransformBroadcaster tfbr;
 
-	ros::Rate rate(loopRate);
+	ros::Rate rate(param_loop_rate);
 	ros::spinOnce();
 
 	//Sit and wait until the inputs are ready
-	while( !freshCommands || !freshTransform ) {
+	while( ros::ok() && ( !freshCommands || !freshTransform ) ) {
 		freshCommands = commandTimeout > ( ros::Time::now() - goalVelocity.header.stamp ).toSec();
-		freshTransform = tfln.waitForTransform( "/world", "/fcu", ros::Time::now(), ros::Duration(1.0) );
+		freshTransform = tfln.waitForTransform( param_tf_global, param_tf_body, ros::Time::now(), ros::Duration(1.0) );
 
 		ROS_INFO_THROTTLE( 2.0, "Waiting for inputs to become avaliable: [cmd: %d; tf: %d]", freshCommands, freshTransform );
 
@@ -167,10 +249,10 @@ int main(int argc, char **argv) {
 		if( freshTransform ) {
 			try {
 				//Get the latest pose of the fcu in the world
-				tfln.lookupTransform("/world", "/fcu", ros::Time(0), currentTransform);
+				tfln.lookupTransform(param_tf_global, param_tf_body, ros::Time(0), currentTransform);
 
 				//Get the latest twist (velocity) estimate of the fcu relative to the world
-				tfln.lookupTwist("fcu/ref", "world", "fcu/ref", tf::Point(), "world", ros::Time(0), ros::Duration(0.5), worldVelocity);
+				tfln.lookupTwist(param_tf_ref, param_tf_global, param_tf_ref, tf::Point(), param_tf_global, ros::Time(0), ros::Duration(0.5), worldVelocity);
 			}
 
 			catch (tf::TransformException ex) {
@@ -183,9 +265,6 @@ int main(int argc, char **argv) {
 
 				//Prepare the output rotation goal message
 				//Need to use the current rotation to get the yaw rate to work (that it doesn't try to yaw if no commands are sent)
-				//geometry_msgs::Quaternion qRot;
-				//quaternionTFToMsg( currentTransform.getRotation(), qRot );
-				//geometry_msgs::Vector3 rot = toEuler( qRot );
 				geometry_msgs::Vector3 rot;
 				tf::Matrix3x3(currentTransform.getRotation()).getRPY(rot.x, rot.y, rot.z);
 
@@ -199,10 +278,8 @@ int main(int argc, char **argv) {
 				vel = tf::quatRotate(tf::createQuaternionFromYaw(-rot.z), vel);
 				tf::vector3TFToMsg(vel, bodyVelocity.linear);
 
-				if( DEBUG_MSGS ) {
-					ROS_INFO("Cur Vel: [%0.2f, %0.2f, %0.2f]", bodyVelocity.linear.x, bodyVelocity.linear.y, bodyVelocity.linear.z );
-					ROS_INFO("Goal Vel: [%0.2f, %0.2f, %0.2f; %0.2f]", goalVelocity.twist.linear.x, goalVelocity.twist.linear.y, goalVelocity.twist.linear.z, goalVelocity.twist.angular.z);
-				}
+				ROS_DEBUG("Cur Vel: [%0.2f, %0.2f, %0.2f]", bodyVelocity.linear.x, bodyVelocity.linear.y, bodyVelocity.linear.z );
+				ROS_DEBUG("Goal Vel: [%0.2f, %0.2f, %0.2f; %0.2f]", goalVelocity.twist.linear.x, goalVelocity.twist.linear.y, goalVelocity.twist.linear.z, goalVelocity.twist.angular.z);
 			}
 		} else {
 			ROS_ERROR_ONCE( "[Timeout] No new transform information" );
@@ -217,7 +294,7 @@ int main(int argc, char **argv) {
 			double Tx = vel_x_pid.step(goalVelocity.twist.linear.x, bodyVelocity.linear.x );
 			double Ty = vel_y_pid.step(goalVelocity.twist.linear.y, bodyVelocity.linear.y );
 			double Tz = vel_z_pid.step(goalVelocity.twist.linear.z, bodyVelocity.linear.z ) + param_throttle_mid; //TODO: Add in a hover approximation
-			double goalHeading = currentHeading + ( param_yaw_rate_ff * goalVelocity.twist.angular.z * ( 1.0 / loopRate ) );// - M_PI/2;
+			double goalHeading = currentHeading + ( param_yaw_rate_ff * goalVelocity.twist.angular.z * ( 1.0 / param_loop_rate ) );// - M_PI/2;
 
 			while( goalHeading > M_PI)
 				goalHeading -= M_PI * 2;
@@ -225,10 +302,8 @@ int main(int argc, char **argv) {
 			while( goalHeading < -M_PI)
 				goalHeading += M_PI * 2;
 
-			if( DEBUG_MSGS ) {
-				ROS_INFO("[Yaw, Goal]: [%0.2f, %0.2f]", currentHeading, goalHeading );
-				ROS_INFO("Goal Thrust: [%0.2f, %0.2f, %0.2f]", Tx, Ty, Tz);
-			}
+			ROS_DEBUG("[Yaw, Goal]: [%0.2f, %0.2f]", currentHeading, goalHeading );
+			ROS_DEBUG("Goal Thrust: [%0.2f, %0.2f, %0.2f]", Tx, Ty, Tz);
 
 			//Thrust Calculation
 			tf::Vector3 gThrust(Tx, Ty, Tz);
@@ -251,15 +326,15 @@ int main(int argc, char **argv) {
 			}
 
 			//If thrust_abs > thr_max
-			if( gThrust.length() > param_thr_max ) {
+			if( gThrust.length() > param_throttle_max ) {
 				//If thrust_z larger than thr_max, limit throttle, set xy to 0
-				if( gThrust.getZ() > param_thr_max ) {
+				if( gThrust.getZ() > param_throttle_max ) {
 					gThrust.setX( 0.0 );
 					gThrust.setY( 0.0 );
-					gThrust.setZ( param_thr_max );
+					gThrust.setZ( param_throttle_max );
 					ROS_WARN_THROTTLE(0.1, "Too much thrust, scaling Z");
 				} else { //The XY thrust is the cause of the over-thrust, so scale down
-					double thrust_xy_max = sqrtf( ( param_thr_max * param_thr_max ) - ( gThrust.getZ() * gThrust.getZ() ) );
+					double thrust_xy_max = sqrtf( ( param_throttle_max * param_throttle_max ) - ( gThrust.getZ() * gThrust.getZ() ) );
 					double k = thrust_xy_max / xyThrust.length();
 					gThrust.setX( k * gThrust.getX() );
 					gThrust.setY( k * gThrust.getY() );
@@ -279,23 +354,28 @@ int main(int argc, char **argv) {
 				body_z = gThrust.normalized();
 				body_z = tf::quatRotate(tf::createQuaternionFromYaw(goalHeading), body_z);
 
-				if( DEBUG_MSGS )
-					ROS_INFO( "body_z: [%0.2f, %0.2f, %0.2f]", body_z.getX(), body_z.getY(), body_z.getZ() );
+				ROS_DEBUG( "body_z: [%0.2f, %0.2f, %0.2f]", body_z.getX(), body_z.getY(), body_z.getZ() );
 			} else {
 				//No thrust commanded, align with straight up
 				body_z.setZ( 1.0 );
 				ROS_INFO("No thrust command, keeping zero Z orientation!");
 			}
 
-			//If the thrust vector is anything at all //TODO: This can be assumed as OK?
+			//Check to make sure the thrust vector is in the Z axis, or on the XY plane
 			if (fabs(body_z.getZ()) > SIGMA) {
 				//Get a vector that aligns the Y axis with the goal heading (X axis with heading + pi/2)
-				tf::Vector3 yaw_r( -sin(goalHeading), cos(goalHeading), 0.0f );
+				tf::Vector3 yaw_r( -sin( goalHeading ), cos( goalHeading ), 0.0f );
 				//Get the orthagonal vector to that (which will have correct pitch)
 				body_x = yaw_r.cross(body_z);
-				//TODO: there is a check that can be made here to make sure forward is kept when upside-down
+
+				/* keep nose to front while inverted upside down */
+				if (body_z.getZ() < 0.0f)
+					body_x = -body_x;
+
 				body_x.normalize();
 			} else {
+				/* desired thrust is in XY plane, set X downside to construct correct matrix,
+				 * but yaw component will not be used actually */
 				body_x.setZ( 1.0 );
 				ROS_INFO("No thrust command, keeping zero XY orientation!");
 			}
@@ -318,18 +398,16 @@ int main(int argc, char **argv) {
 			R.getRotation( goalThrustRotation );
 			goalThrust = gThrust.length();
 
-			if( DEBUG_MSGS ) {
-				ROS_INFO( "Output Thrust: [%0.2f, %0.2f, %0.2f]", gThrust.getX(), gThrust.getY(), gThrust.getZ() );
-				ROS_INFO( "Output Rotation:\n\tx: [%0.2f, %0.2f, %0.2f]\n\ty: [%0.2f, %0.2f, %0.2f]\n\tz: [%0.2f, %0.2f, %0.2f]",	body_x.getX(), body_x.getY(), body_x.getZ(),
-																															body_y.getX(), body_y.getY(), body_y.getZ(),
-																															body_z.getX(), body_z.getY(), body_z.getZ());
-			}
+			ROS_DEBUG( "Output Thrust: [%0.2f, %0.2f, %0.2f]", gThrust.getX(), gThrust.getY(), gThrust.getZ() );
+			ROS_DEBUG( "Output Rotation:\n\tx: [%0.2f, %0.2f, %0.2f]\n\ty: [%0.2f, %0.2f, %0.2f]\n\tz: [%0.2f, %0.2f, %0.2f]",	body_x.getX(), body_x.getY(), body_x.getZ(),
+																														body_y.getX(), body_y.getY(), body_y.getZ(),
+																														body_z.getX(), body_z.getY(), body_z.getZ());
 		} else {
 			//Prevent PID windup
 			vel_x_pid.reset();
 			vel_y_pid.reset();
 			vel_z_pid.reset();
-			//TODO: more resets here? (DOESN'T CUT THRUST
+
 			ROS_INFO_THROTTLE( 1.0, "Publishing to hold orientation, and low thrust..." );
 		}
 
@@ -342,18 +420,8 @@ int main(int argc, char **argv) {
 		goalTransform.setOrigin( tf::Vector3() );
 		goalTransform.setRotation( goalThrustRotation );
 
-		tfbr.sendTransform(tf::StampedTransform(goalTransform, ros::Time::now(), "fcu/ref", "fcu/goal"));
+		tfbr.sendTransform(tf::StampedTransform(goalTransform, ros::Time::now(), param_tf_ref, param_tf_goal));
 		att_pub.publish(outputAttitude);
-
-		//Debug Output //================================================================
-		if( DEBUG_MSGS ) {
-			geometry_msgs::Vector3 outputRot;
-			tf::Matrix3x3(goalThrustRotation).getRPY(outputRot.x, outputRot.y, outputRot.z);
-
-			ROS_INFO("Output (rad): [%0.2f, %0.2f, %0.2f; %0.2f]", outputRot.x, outputRot.y, outputRot.z, goalThrust);
-			ROS_INFO("Output (deg): [%0.2f, %0.2f, %0.2f; %0.2f]", 180*outputRot.x/M_PI, 180*outputRot.y/M_PI, 180*outputRot.z/M_PI, goalThrust);
-			ROS_INFO("--------");
-		}
 
 		//Sleep //================================================================
 		rate.sleep();
