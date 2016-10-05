@@ -23,12 +23,7 @@
 // Callback Functions             //
 //================================//
 
-geometry_msgs::PoseStamped currentPose;
 geometry_msgs::TwistStamped goalVelocity;
-
-void local_pos_cb(const geometry_msgs::PoseStamped::ConstPtr& msg) {
-	currentPose = *msg;
-}
 
 void cmd_vel_cb(const geometry_msgs::TwistStamped::ConstPtr& msg) {
 	goalVelocity = *msg;
@@ -49,6 +44,8 @@ int main(int argc, char **argv) {
 	bool freshTransform = false;	//The thread will be locked to only sending safety values
 
 	double param_loop_rate = 20.0;
+	double param_trottle_threshold = 0.1;
+	bool thr_threshold_passed = false;
 
 	std::string param_cmd_vel = "cmd_vel";
 	std::string param_cmd_att = "cmd_att";
@@ -289,8 +286,8 @@ int main(int argc, char **argv) {
 
 		//Main control loop
 		//If inputs are lost at all, panic
-		if( freshCommands && freshTransform ) {
-			ROS_INFO_THROTTLE( 1.0, "Publishing attitude setpoints..." );
+		if( freshCommands && freshTransform && thr_threshold_passed ) {
+			ROS_INFO_THROTTLE( 2.0, "Publishing attitude setpoints..." );
 
 			//Calculate goal accelerations
 			double Tx = vel_x_pid.step(goalVelocity.twist.linear.x, bodyVelocity.linear.x );
@@ -410,7 +407,14 @@ int main(int argc, char **argv) {
 			vel_y_pid.reset();
 			vel_z_pid.reset();
 
-			ROS_INFO_THROTTLE( 1.0, "Publishing to hold orientation, and low thrust..." );
+			ROS_INFO_THROTTLE( 2.0, "Publishing to hold orientation, and low thrust..." );
+
+			tf::Vector3 velCheck;
+			tf::vector3MsgToTF( goalVelocity.twist.linear, velCheck);
+			if(velCheck.length() > param_trottle_threshold) {	//TODO: Maybe should check for angular as well?
+				thr_threshold_passed = true;
+				ROS_INFO_ONCE("Velocity commands non-zero, activating flight");
+			}
 		}
 
 		//TODO: When available: outputAttitude.body_rate = goalVelocity.twist.angular;
