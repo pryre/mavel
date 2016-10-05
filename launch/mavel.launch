@@ -1,0 +1,16 @@
+<launch>
+	<node pkg="mavel" type="mavel_node" name="mavel" clear_params="true" output="screen">
+		<!-- Connection Parameters -->
+		<param name="velocity_input" value="cmd_vel" type="str" />
+		<param name="attitude_output" value="/mavros/setpoint_raw/attitude" type="str" />
+
+		<!-- Transform Parameters -->
+		<param name="global_frame" value="world" type="str" />
+		<param name="body_frame" value="fcu" type="str" />
+		<param name="body_reference" value="fcu/ref" type="str" />
+		<param name="body_goal" value="fcu/goal" type="str" />
+
+		<!-- Controller Parameters /-->
+		<rosparam command="load" file="$(find mavel)/launch/params.yaml"/>
+	</node>
+</launch>

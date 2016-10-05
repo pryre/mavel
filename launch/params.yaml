@@ -1,0 +1,32 @@
+# Common configuration for the mavel velocity controller
+
+# Horizontal Velocity Controller
+vel_xy_pid:
+  p: 0.15
+  i: 0.01
+  d: 0.05
+  min: -1.0
+  max: 1.0
+
+# Vertical Velocity Controller
+vel_z_pid:
+  p: 0.10
+  i: 0.10
+  d: 0.05
+
+# Throttle Parameters
+throttle:
+  min: 0.20
+  mid: 0.5
+  max: 0.90
+
+# Maximum tilt angle
+tilt_max: 0.39
+
+# Yaw rate feed forward
+rate_yaw:
+  ff: 10.0
+
+# Update Rate (Hz)
+loop_rate: 20.0
+
