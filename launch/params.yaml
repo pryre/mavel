@@ -16,7 +16,7 @@ vel_z_pid:
 
 # Throttle Parameters
 throttle:
-  min: 0.20
+  min: 0.10
   mid: 0.5
   max: 0.90
 
@@ -25,7 +25,7 @@ tilt_max: 0.39
 
 # Yaw rate feed forward
 rate_yaw:
-  ff: 10.0
+  ff: 1.0
 
 # Update Rate (Hz)
 loop_rate: 20.0

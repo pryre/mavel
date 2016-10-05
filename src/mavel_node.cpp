@@ -51,8 +51,7 @@ int main(int argc, char **argv) {
 	std::string param_cmd_att = "cmd_att";
 	std::string param_tf_global = "world";
 	std::string param_tf_body = "fcu/body";
-	std::string param_tf_ref = "fcu/hdg_link";
-	std::string param_tf_base = "fcu/base_link";
+	std::string param_tf_ref = "fcu/base_link";
 	std::string param_tf_goal = "fcu/goal";
 
 	double param_vel_xy_pid_p = 0.15;
@@ -234,7 +233,7 @@ int main(int argc, char **argv) {
 		tf::Transform goalTransform;
 		double goalYawRate = 0.0;
 
-		tf::Quaternion goalThrustRotation;
+		tf::Quaternion goalThrustRotation(0.0, 0.0, 0.0, 1.0);
 		double goalThrust = param_throttle_min;
 
 		//TODO: Should have something to set low throttle and no movement until a certain threshold is passed for the first time
@@ -251,7 +250,7 @@ int main(int argc, char **argv) {
 				tfln.lookupTransform(param_tf_global, param_tf_body, ros::Time(0), currentTransform);
 
 				//Get the latest twist (velocity) estimate of the fcu relative to the world
-				tfln.lookupTwist(param_tf_base, param_tf_global, param_tf_base, tf::Point(), param_tf_global, ros::Time(0), ros::Duration(0.5), worldVelocity);
+				tfln.lookupTwist(param_tf_ref, param_tf_global, param_tf_ref, tf::Point(), param_tf_global, ros::Time(0), ros::Duration(0.5), worldVelocity);
 			}
 
 			catch (tf::TransformException ex) {
@@ -265,6 +264,8 @@ int main(int argc, char **argv) {
 				//Need to use the current rotation to get the yaw rate to work (that it doesn't try to yaw if no commands are sent)
 				geometry_msgs::Vector3 rot;
 				tf::Matrix3x3(currentTransform.getRotation()).getRPY(rot.x, rot.y, rot.z);
+
+				goalThrustRotation = currentTransform.getRotation();
 
 				//Align velocity frame with the body frame
 				tf::Vector3 vel;	//TODO: This probably only works when the UAV is right-side-up
