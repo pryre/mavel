@@ -2,7 +2,8 @@
 	<node pkg="mavel" type="mavel_node" name="mavel" clear_params="true" output="screen">
 		<!-- Connection Parameters -->
 		<param name="velocity_input" value="cmd_vel" type="str" />
-		<param name="attitude_output" value="/mavros/setpoint_raw/attitude" type="str" />
+		<!-- param name="attitude_output" value="/mavros/setpoint_raw/attitude" type="str" / -->
+		<param name="attitude_output" value="/mavrc/input" type="str" />
 
 		<!-- Transform Parameters -->
 		<param name="global_frame" value="world" type="str" />

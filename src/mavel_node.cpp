@@ -51,7 +51,8 @@ int main(int argc, char **argv) {
 	std::string param_cmd_att = "cmd_att";
 	std::string param_tf_global = "world";
 	std::string param_tf_body = "fcu/body";
-	std::string param_tf_ref = "fcu/ref";
+	std::string param_tf_ref = "fcu/hdg_link";
+	std::string param_tf_base = "fcu/base_link";
 	std::string param_tf_goal = "fcu/goal";
 
 	double param_vel_xy_pid_p = 0.15;
@@ -188,7 +189,6 @@ int main(int argc, char **argv) {
 	ROS_INFO("[Parameters Loaded]");
 
 	mavros_msgs::AttitudeTarget outputAttitude;
-	//TODO: seperate rates are not yet properly supported, just ignore all
 	outputAttitude.type_mask = outputAttitude.IGNORE_ROLL_RATE + outputAttitude.IGNORE_PITCH_RATE;	//We want to send yaw rate, but not other rates
 	outputAttitude.header.frame_id = param_tf_goal;
 
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
 		geometry_msgs::Twist bodyVelocity;
 		geometry_msgs::Twist worldVelocity;
 		tf::Transform goalTransform;
-		double currentHeading = 0.0;
+		double goalYawRate = 0.0;
 
 		tf::Quaternion goalThrustRotation;
 		double goalThrust = param_throttle_min;
@@ -251,7 +251,7 @@ int main(int argc, char **argv) {
 				tfln.lookupTransform(param_tf_global, param_tf_body, ros::Time(0), currentTransform);
 
 				//Get the latest twist (velocity) estimate of the fcu relative to the world
-				tfln.lookupTwist(param_tf_ref, param_tf_global, param_tf_ref, tf::Point(), param_tf_global, ros::Time(0), ros::Duration(0.5), worldVelocity);
+				tfln.lookupTwist(param_tf_base, param_tf_global, param_tf_base, tf::Point(), param_tf_global, ros::Time(0), ros::Duration(0.5), worldVelocity);
 			}
 
 			catch (tf::TransformException ex) {
@@ -261,15 +261,10 @@ int main(int argc, char **argv) {
 
 			//Only bother doing these steps if there is actually a new transform, as they will cause nan errors
 			if( freshTransform ) {
-
 				//Prepare the output rotation goal message
 				//Need to use the current rotation to get the yaw rate to work (that it doesn't try to yaw if no commands are sent)
 				geometry_msgs::Vector3 rot;
 				tf::Matrix3x3(currentTransform.getRotation()).getRPY(rot.x, rot.y, rot.z);
-
-				//Get relevant heading variables
-				currentHeading = rot.z;
-				goalThrustRotation = currentTransform.getRotation();
 
 				//Align velocity frame with the body frame
 				tf::Vector3 vel;	//TODO: This probably only works when the UAV is right-side-up
@@ -293,16 +288,11 @@ int main(int argc, char **argv) {
 			double Tx = vel_x_pid.step(goalVelocity.twist.linear.x, bodyVelocity.linear.x );
 			double Ty = vel_y_pid.step(goalVelocity.twist.linear.y, bodyVelocity.linear.y );
 			double Tz = vel_z_pid.step(goalVelocity.twist.linear.z, bodyVelocity.linear.z ) + param_throttle_mid; //TODO: Add in a hover approximation
-			double goalHeading = currentHeading + ( param_yaw_rate_ff * goalVelocity.twist.angular.z * ( 1.0 / param_loop_rate ) );// - M_PI/2;
 
-			while( goalHeading > M_PI)
-				goalHeading -= M_PI * 2;
+			goalYawRate = goalVelocity.twist.angular.z;
 
-			while( goalHeading < -M_PI)
-				goalHeading += M_PI * 2;
-
-			ROS_DEBUG("[Yaw, Goal]: [%0.2f, %0.2f]", currentHeading, goalHeading );
 			ROS_DEBUG("Goal Thrust: [%0.2f, %0.2f, %0.2f]", Tx, Ty, Tz);
+			ROS_DEBUG("Goal Yaw Rate: [%0.2f]", goalYawRate);
 
 			//Thrust Calculation
 			tf::Vector3 gThrust(Tx, Ty, Tz);
@@ -351,7 +341,7 @@ int main(int argc, char **argv) {
 			if( gThrust.length() > SIGMA) {
 				//Get the direction of the thrust vector (and rotate to the body frame)
 				body_z = gThrust.normalized();
-				body_z = tf::quatRotate(tf::createQuaternionFromYaw(goalHeading), body_z);
+				//body_z = tf::quatRotate(tf::createQuaternionFromYaw(goalHeading), body_z);
 
 				ROS_DEBUG( "body_z: [%0.2f, %0.2f, %0.2f]", body_z.getX(), body_z.getY(), body_z.getZ() );
 			} else {
@@ -362,8 +352,8 @@ int main(int argc, char **argv) {
 
 			//Check to make sure the thrust vector is in the Z axis, or on the XY plane
 			if (fabs(body_z.getZ()) > SIGMA) {
-				//Get a vector that aligns the Y axis with the goal heading (X axis with heading + pi/2)
-				tf::Vector3 yaw_r( -sin( goalHeading ), cos( goalHeading ), 0.0f );
+				//Get a vector that aligns the Y axis with pi/2
+				tf::Vector3 yaw_r( 0.0f, 1.0f, 0.0f );
 				//Get the orthagonal vector to that (which will have correct pitch)
 				body_x = yaw_r.cross(body_z);
 
@@ -422,6 +412,7 @@ int main(int argc, char **argv) {
 		outputAttitude.header.seq++;
 		tf::quaternionTFToMsg( goalThrustRotation, outputAttitude.orientation );
 		outputAttitude.thrust = goalThrust;
+		outputAttitude.body_rate.z = goalYawRate;
 
 		goalTransform.setOrigin( tf::Vector3() );
 		goalTransform.setRotation( goalThrustRotation );
