@@ -10,14 +10,14 @@ vel_xy_pid:
 
 # Vertical Velocity Controller
 vel_z_pid:
-  p: 0.10
-  i: 0.10
-  d: 0.05
+  p: 0.05
+  i: 0.075
+  d: 0.00
 
 # Throttle Parameters
 throttle:
   min: 0.10
-  mid: 0.5
+  mid: 0.35
   max: 0.90
 
 # Maximum tilt angle
