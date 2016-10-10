@@ -2,9 +2,9 @@
 
 # Horizontal Velocity Controller
 vel_xy_pid:
-  p: 0.15
+  p: 0.10
   i: 0.01
-  d: 0.05
+  d: 0.02
   min: -1.0
   max: 1.0
 
