@@ -72,13 +72,32 @@ class Mavel {
 		ros::NodeHandle nh_;
 		ros::Publisher pub_ping_;
 
-		double param_output_rate_control_;
+		ros::Timer timer_tf_;
+		ros::Timer timer_control_position_;
+		ros::Timer timer_control_velocity_;
+		ros::Timer timer_control_acceleration_;
 
-		mavel_data_stream<geometry_msgs::Pose> stream_reference_position_;
-		mavel_data_stream<geometry_msgs::Twist> stream_reference_velocity_;
-		mavel_data_stream<geometry_msgs::Pose> stream_setpoint_position_;
-		mavel_data_stream<geometry_msgs::Twist> stream_setpoint_velocity_;
-		mavel_data_stream<geometry_msgs::Accel> stream_setpoint_acceleration_;
+		double param_rate_tf_lookups;
+		double param_rate_control_position_;
+		double param_rate_control_velocity_;
+		double param_rate_control_acceleration_;
+
+		bool param_external_velocity_setpoint;
+		bool param_external_acceleration_setpoint;
+
+		//Timeout in seconds
+		//Required stream count is derived as 1/timeout
+		double param_timeout_stream_reference_position;
+		double param_timeout_stream_reference_acceleration;
+		double param_timeout_stream_setpoint_position;
+		double param_timeout_stream_setpoint_velocity;
+		double param_timeout_stream_setpoint_acceleration;
+
+		mavel_data_stream<geometry_msgs::PoseStamped> stream_reference_position_;
+		mavel_data_stream<geometry_msgs::TwistStamped> stream_reference_velocity_;
+		mavel_data_stream<geometry_msgs::PoseStamped> stream_setpoint_position_;
+		mavel_data_stream<geometry_msgs::TwistStamped> stream_setpoint_velocity_;
+		mavel_data_stream<geometry_msgs::AccelStamped> stream_setpoint_acceleration_;
 
 		mavel_params_pid param_pid_position_x;
 		mavel_params_pid param_pid_position_y;
@@ -87,16 +106,17 @@ class Mavel {
 		mavel_params_pid param_pid_velocity_y;
 		mavel_params_pid param_pid_velocity_z;
 
-		double body_rate_z;
+		double integrator_body_rate_z_;
 
-		std::string topic_input_position_reference_;
-		std::string topic_input_velocity_reference_;
-		bool param_tf_position_input_;
-		bool param_tf_goal_input_;
-		bool param_tf_estimate_velocity_;
+		bool param_tf_reference_position_;
+		bool param_tf_reference_velocity_;
+		bool param_tf_setpoint_position_;
 		std::string tf_frame_world_;
 		std::string tf_frame_mav_;
 		std::string tf_frame_goal_;
+
+		std::string topic_input_position_reference_;
+		std::string topic_input_velocity_reference_;
 
 		std::string topic_input_position_setpoint_;
 		std::string topic_input_velocity_setpoint_;
@@ -112,17 +132,20 @@ class Mavel {
 
 		~Mavel( void );
 
-		double get_rate( void );
-
 		void reference_position_cb( const geometry_msgs::PoseStamped::ConstPtr& msg_in );
 		void reference_velocity_cb( const geometry_msgs::TwistStamped::ConstPtr& msg_in );
+		//Handles all the TF requests as set by the params
+		//Calls the reference and setpoint callbacks to handle the actual data contained
+		void reference_tf_cb( const ros::TimerEvent& );
 
 		void setpoint_position_cb( const geometry_msgs::PoseStamped::ConstPtr& msg_in );
 		void setpoint_velocity_cb( const geometry_msgs::TwistStamped::ConstPtr& msg_in );
 		void setpoint_accel_cb( const geometry_msgs::AccelStamped::ConstPtr& msg_in );
-		//void ping_cb( const std_msgs::Empty::ConstPtr& msg_in );
 
-		void step( void );
+		//These will hanlde controller steps and publishing any feedback data
+		void controller_position_cb( const ros::TimerEvent& );	//Generates a velocity setpoint
+		void controller_velocity_cb( const ros::TimerEvent& );	//Generates an acceleration setpoint
+		void controller_acceleration_cb( const ros::TimerEvent& );	//Generates the attitude target
 
 	private:
 		//Initializes the pid parameters for a controller
@@ -130,12 +153,12 @@ class Mavel {
 		void param_pid_init( mavel_params_pid* pid );
 
 		//Initializes the stream parameters
-		void stream_init( mavel_data_stream* );
+		void stream_init( mavel_data_stream* stream );
 
 		//Updates the stream information that new data has been recieved
-		//Returns flag to say if state has changed
-		void stream_update( mavel_data_stream, ros::Time stamp );
+		//New data should have already been added into the stream
+		void stream_update( mavel_data_stream* stream );
 
 		//Checks the stream for a timeout
-		void stream_check( mavel_data_stream, ros::Time stamp );
+		void stream_check( mavel_data_stream* stream, ros::Time time_now );
 };

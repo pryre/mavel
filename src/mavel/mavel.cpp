@@ -25,43 +25,58 @@ Mavel::Mavel() :
 	//pub_ping_ = nh_.advertise<std_msgs::Empty>( topic_output_attitude_, 100 );
 
 	//sub_ping_ = nh_.subscribe<std_msgs::Empty>( topic_input_ping_, 100, &Spinner::ping_cb, this );
-	//sub_ping_ = nh_.subscribe<std_msgs::Empty>( topic_input_ping_, 100, &Spinner::ping_cb, this );
 
-	//ROS_INFO("Pulsing...");
+	//ros::Timer timer = n.createTimer(ros::Duration(0.1), timerCallback);
+
+	//====================
+	//XXX:Notes for later
+	//====================
+	//	double dt = (timerCallback.current_real - timerCallback.last_real).toSec();
+	//====================
+	//	geometry_msgs::TransformStamped transform = anything;
+	//	geometry_msgs::PoseStamped pose;
+	//	tf2::convert(transform, pose);
+	//====================
+
+	ROS_INFO("Mavel setup and running!");
 }
 
 Mavel::~Mavel() {
-	//This message won't actually send here, as the node will have already shut down
-	ROS_INFO("Shutting down...");
+	ROS_INFO("Mavel shutting down...");
+
+	//TODO: Remember to free tf broadcaster
 }
 
-double Mavel::get_rate( void ) {
-	return param_output_rate_control_;
-}
-
-//void Mavel::ping_cb( const std_msgs::Empty::ConstPtr& msg_in ) {
-	//We subscribe to the const pointer here to avoid doing a copy of the data
-	// but we must be careful, as messages may be pushed out of the buffer if we take too long
-
-	//To access to the message data, for example we can use the syntax:
-	//	ros::Time msg_rec_time = msg_in->header.stamp;
-
-	//ROS_INFO("Got ping #%lu!", counter_);
-//}
-
-void Mavel::step( void ) {
-	//geometry_msgs::TransformStamped transform = anything;
-	//geometry_msgs::PoseStamped pose;
-	//tf2::convert(transform, pose);
 
 	//==-- Process:
-	//Calculate dt
 	//Position Control
+	//	Perform timing checks
 	//	Check active
-	//	Check data is fresh
+	//	Check reference data is fresh
+	//	Check setpoint data is fresh
+	//	(TF stuff here)
 	//	Step PID controller
-	//
+	//	Save data for feedback
 
+	//Velocity Control
+	//	Perform timing checks
+	//	Check active
+	//	Check reference data is fresh
+	//	Check setpoint data is fresh
+	//	(TF stuff here)
+	//	Step PID controller
+	//	Save data for feedback
+
+	//Acceleration Control
+	//	Perform timing checks
+	//	Check setpoint data is fresh
+	//	Calculate thrust vector
+
+	//Control Output
+	//	Check whether orientation or body rate should be used (and integrate accel body rate if necessary)
+	//	Do input masking as appropriate
+	//	Send attitude target
+	//	Send position, velocity, and acceleration feedback where relevant
 }
 
 
