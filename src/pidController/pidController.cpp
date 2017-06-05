@@ -3,6 +3,36 @@
 #include <math.h>
 #include <assert.h>
 
+pidController::pidController() :
+	kp_( 0.0f ),
+	ki_( 0.0f ),
+	kd_( 0.0f ),
+	tau_( 0.0f ),
+	x_( 0.0f ),
+	x_dot_( 0.0f ),
+	sp_( 0.0f ),
+	control_output_( 0.0f ) {
+
+	setOutputMinMax( -1.0f, 1.0f );
+
+	this->reset();
+}
+
+pidController::pidController( double initial_x, double initial_x_dot, double initial_setpoint, double initial_output ) :
+	kp_( 0.0f ),
+	ki_( 0.0f ),
+	kd_( 0.0f ),
+	tau_( 0.0f ),
+	x_( initial_x ),
+	x_dot_( initial_x_dot ),
+	sp_( initial_setpoint ),
+	control_output_( initial_output ) {
+
+	setOutputMinMax( -1.0f, 1.0f );
+
+	this->reset();
+}
+
 pidController::pidController( double initial_x, double initial_x_dot, double initial_setpoint, double initial_output, double Kp, double Ki, double Kd, double tau, double min_output, double max_output ) :
 	kp_( Kp ),
 	ki_( Ki ),

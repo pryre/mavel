@@ -1,32 +1,85 @@
 # Common configuration for the mavel velocity controller
 
-# Horizontal Velocity Controller
-vel_xy_pid:
-  p: 0.10
-  i: 0.01
-  d: 0.02
-  min: -1.0
-  max: 1.0
+# Use External Setpoint
+external_setpoint:
+  velocity: false
+  acceleration: false
 
-# Vertical Velocity Controller
-vel_z_pid:
-  p: 0.05
-  i: 0.075
-  d: 0.00
+# Control Rates
+# (must be higher than the derivative data stream rate)
+control_rate:
+  position: 20.0
+  velocity: 30.0
+  acceleration: 50.0
 
-# Throttle Parameters
-throttle:
-  min: 0.10
-  mid: 0.35
-  max: 0.90
+# Data Stream
+stream:
+  min_rate:
+    reference:
+      position: 10.0
+      velocity: 20.0
+    setpoint:
+      position: 5.0
+      velocity: 10.0
+      acceleration: 20.0
+  topic:
+    reference:
+      position: "~reference/position"
+      velocity: "~reference/velocity"
+    setpoint:
+      position: "~setpoint/position"
+      velocity: "~setpoint/velocity"
+      acceleration: "~setpoint/acceleration"
+    feedback:
+      position: "~goal/position"
+      velocity: "~goal/velocity"
+      acceleration: "~goal/acceleration"
+      attitude: "~goal/attitude"
 
-# Maximum tilt angle
-tilt_max: 0.39
-
-# Yaw rate feed forward
-rate_yaw:
-  ff: 1.0
-
-# Update Rate (Hz)
-loop_rate: 20.0
+# PID Controllers
+pid:
+  position:
+    x:
+      kp: 0.10
+      ki: 0.0
+      kd: 0.02
+      tau: 0.05
+      min: -1.0
+      max: 1.0
+    y:
+      kp: 0.10
+      ki: 0.0
+      kd: 0.02
+      tau: 0.05
+      min: -1.0
+      max: 1.0
+    z:
+      kp: 0.10
+      ki: 0.0
+      kd: 0.02
+      tau: 0.05
+      min: -0.5
+      max: 0.5
+  velocity:
+    x:
+      kp: 0.5
+      ki: 0.0
+      kd: 0.02
+      tau: 0.05
+      min: -0.2
+      max: 0.2
+    y:
+      kp: 0.5
+      ki: 0.0
+      kd: 0.0
+      tau: 0.05
+      min: -0.2
+      max: 0.2
+    z:
+      kp: 0.5
+      ki: 0.0
+      kd: 0.0
+      tau: 0.05
+      min: -0.2
+      max: 0.2
 

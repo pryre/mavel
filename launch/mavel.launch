@@ -1,16 +1,5 @@
 <launch>
 	<node pkg="mavel" type="mavel_node" name="mavel" clear_params="true" output="screen">
-		<!-- Connection Parameters -->
-		<param name="velocity_input" value="cmd_vel" type="str" />
-		<!-- param name="attitude_output" value="/mavros/setpoint_raw/attitude" type="str" / -->
-		<param name="attitude_output" value="/mavrc/input" type="str" />
-
-		<!-- Transform Parameters -->
-		<param name="global_frame" value="world" type="str" />
-		<param name="body_frame" value="uav/att_link" type="str" />
-		<param name="body_reference" value="uav/base_link" type="str" />
-		<param name="body_goal" value="uav/goal" type="str" />
-
 		<!-- Controller Parameters /-->
 		<rosparam command="load" file="$(find mavel)/launch/params.yaml"/>
 	</node>

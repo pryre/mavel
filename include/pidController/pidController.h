@@ -2,6 +2,8 @@
 
 class pidController {
 	public:
+		pidController();
+		pidController( double initial_x, double initial_x_dot, double initial_setpoint, double initial_output );
 		pidController( double initial_x, double initial_x_dot, double initial_setpoint, double initial_output, double Kp, double Ki, double Kd, double tau, double min_output, double max_output );
 		~pidController();
 

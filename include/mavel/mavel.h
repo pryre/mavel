@@ -51,9 +51,9 @@ enum mavel_data_stream_states {
 template<typename streamDataT> struct mavel_data_stream {
 	bool state;				//Whether the stream is reliable
 
-	ros::Time stamp;		//Time of the last update
 	ros::Duration timeout;	//How long to wait before a timeout
-	double count;			//The current data count since last timeout
+	uint64_t count;			//The current data count since last timeout
+	uint64_t stream_count;	//The data count needed to establish a stream
 
 	std::string stream_topic;	//Name of the data stream (for console output)
 	streamDataT data;		//Latest data from the stream
@@ -63,9 +63,11 @@ struct mavel_params_pid {
 	double kp;
 	double ki;
 	double kd;
+
 	double tau;
 
-	std::string param_base_name;	//Name of parameters to query the parameter server woth
+	double min;
+	double max;
 };
 
 class Mavel {
@@ -90,20 +92,20 @@ class Mavel {
 		ros::Timer timer_control_velocity_;
 		ros::Timer timer_control_acceleration_;
 
+		bool param_external_velocity_setpoint;
+		bool param_external_acceleration_setpoint;
+
 		double param_rate_control_position_;
 		double param_rate_control_velocity_;
 		double param_rate_control_acceleration_;
 
-		bool param_external_velocity_setpoint;
-		bool param_external_acceleration_setpoint;
-
-		//Timeout in seconds
-		//Required stream count is derived as 1/timeout
-		double param_timeout_stream_reference_position;
-		double param_timeout_stream_reference_acceleration;
-		double param_timeout_stream_setpoint_position;
-		double param_timeout_stream_setpoint_velocity;
-		double param_timeout_stream_setpoint_acceleration;
+		//Rate in Hz
+		//Required stream count is derived as 2*rate
+		double param_stream_min_rate_position_reference_;
+		double param_stream_min_rate_velocity_reference_;
+		double param_stream_min_rate_position_setpoint_;
+		double param_stream_min_rate_velocity_setpoint_;
+		double param_stream_min_rate_acceleration_setpoint_;
 
 		mavel_data_stream<geometry_msgs::PoseStamped> stream_reference_position_;
 		mavel_data_stream<geometry_msgs::TwistStamped> stream_reference_velocity_;
@@ -111,12 +113,19 @@ class Mavel {
 		mavel_data_stream<geometry_msgs::TwistStamped> stream_setpoint_velocity_;
 		mavel_data_stream<geometry_msgs::AccelStamped> stream_setpoint_acceleration_;
 
-		mavel_params_pid param_pid_position_x;
-		mavel_params_pid param_pid_position_y;
-		mavel_params_pid param_pid_position_z;
-		mavel_params_pid param_pid_velocity_x;
-		mavel_params_pid param_pid_velocity_y;
-		mavel_params_pid param_pid_velocity_z;
+		mavel_params_pid param_pid_pos_x;
+		mavel_params_pid param_pid_pos_y;
+		mavel_params_pid param_pid_pos_z;
+		mavel_params_pid param_pid_vel_x;
+		mavel_params_pid param_pid_vel_y;
+		mavel_params_pid param_pid_vel_z;
+
+		pidController controller_pos_x;
+		pidController controller_pos_y;
+		pidController controller_pos_z;
+		pidController controller_vel_x;
+		pidController controller_vel_y;
+		pidController controller_vel_z;
 
 		double integrator_body_rate_z_;
 
@@ -156,18 +165,18 @@ class Mavel {
 	private:
 		//Initializes the pid parameters for a controller
 		//param_base_name should be set first (e.g. "~/pid/position/")
-		void param_pid_init( mavel_params_pid* pid );
+		void param_pid_init( mavel_params_pid* pid, std::string controller_name );
 
 		//Initializes the stream parameters
 		template<typename streamDataT>
-		void stream_init( mavel_data_stream<streamDataT>* stream );
+		void stream_init( mavel_data_stream<streamDataT>* stream, double min_rate, std::string topic );
 
 		//Updates the stream information that new data has been recieved
 		//New data should have already been added into the stream
 		template<typename streamDataT>
-		void stream_update( mavel_data_stream<streamDataT>* stream );
+		void stream_update( mavel_data_stream<streamDataT>* stream, <streamDataT>* data );
 
 		//Checks the stream for a timeout
 		template<typename streamDataT>
-		void stream_check( mavel_data_stream<streamDataT>* stream, ros::Time time_now );
+		mavel_data_stream_states stream_check( mavel_data_stream<streamDataT>* stream, ros::Time time_now );
 };
