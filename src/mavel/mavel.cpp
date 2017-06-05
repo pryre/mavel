@@ -1,42 +1,81 @@
-#include <ros/ros.h>
 #include <mavel/mavel.h>
 #include <pidController/pidController.h>
 
+#include <ros/ros.h>
+
 #include <tf2/transform_datatypes.h>
 #include <tf2_ros/transform_listener.h>
-#include <tf2_ros/transform_broadcaster.h>
 
-#include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/AccelStamped.h>
 
+#include <geometry_msgs/TransformStamped.h>
+#include <geometry_msgs/Point.h>
+#include <mavros_msgs/AttitudeTarget.h>
+
 #include <string>
 
 Mavel::Mavel() :
-	nh_("~" ),
-	param_output_rate_control_( 50.0f ),
+	nh_( "~" ),
+	tfln_( tfbuffer_ ),
+	param_rate_control_position_( 50.0f ),
 	topic_output_attitude_( "~attitude_goal" ) {
 
 	//Get parameters, or if not defined, use the defaults
 	//nh_.param( "output_rate_control", param_output_rate_control_, param_output_rate_control_);
 	//nh_.param( "topic_output_ping", topic_output_attitude_, topic_output_attitude_ );
 
-	//pub_ping_ = nh_.advertise<std_msgs::Empty>( topic_output_attitude_, 100 );
+	//Publishers for control feedback
+	pub_output_attitude_ = nh_.advertise<mavros_msgs::AttitudeTarget>( topic_output_attitude_, 100 );
+	pub_output_acceleration_ = nh_.advertise<geometry_msgs::AccelStamped>( topic_output_acceleration_, 100 );
 
-	//sub_ping_ = nh_.subscribe<std_msgs::Empty>( topic_input_ping_, 100, &Spinner::ping_cb, this );
+	if( !param_external_acceleration_setpoint ) {
+		pub_output_velocity_ = nh_.advertise<geometry_msgs::TwistStamped>( topic_output_velocity_, 100 );
 
-	//ros::Timer timer = n.createTimer(ros::Duration(0.1), timerCallback);
+		if( !param_external_velocity_setpoint ) {
+			pub_output_position_ = nh_.advertise<geometry_msgs::PoseStamped>( topic_output_position_, 100 );
+		}
+	}
 
-	//====================
+	//Subscribers for reference input
+	if( !param_external_acceleration_setpoint ) {
+		sub_reference_velocity_ = nh_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_setpoint_, 100, &Mavel::setpoint_velocity_cb, this );
+
+		if( !param_external_velocity_setpoint ) {
+				sub_reference_position_ = nh_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_setpoint_, 100, &Mavel::setpoint_position_cb, this );
+		}
+	}
+
+	//Subscribers for setpoint input
+	if( param_external_acceleration_setpoint ) {
+		sub_setpoint_acceleration_ = nh_.subscribe<geometry_msgs::AccelStamped>( topic_input_acceleration_setpoint_, 100, &Mavel::setpoint_acceleration_cb, this );
+	} else if( param_external_velocity_setpoint ) {
+		sub_setpoint_velocity_ = nh_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_setpoint_, 100, &Mavel::setpoint_velocity_cb, this );
+	} else {
+			sub_setpoint_position_ = nh_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_setpoint_, 100, &Mavel::setpoint_position_cb, this );
+	}
+
+	//Timers for controllers
+	timer_control_acceleration_ = nh_.createTimer( ros::Duration( param_rate_control_acceleration_ ), &Mavel::controller_acceleration_cb, this );
+
+	if( !param_external_acceleration_setpoint ) {
+		timer_control_velocity_ = nh_.createTimer( ros::Duration( param_rate_control_velocity_ ), &Mavel::controller_velocity_cb, this );
+
+		if( !param_external_velocity_setpoint ) {
+			timer_control_position_ = nh_.createTimer( ros::Duration( param_rate_control_position_ ), &Mavel::controller_position_cb, this );
+		}
+	}
+
+	//================================================================================
 	//XXX:Notes for later
-	//====================
+	//================================================================================
 	//	double dt = (timerCallback.current_real - timerCallback.last_real).toSec();
-	//====================
+	//================================================================================
 	//	geometry_msgs::TransformStamped transform = anything;
 	//	geometry_msgs::PoseStamped pose;
 	//	tf2::convert(transform, pose);
-	//====================
+	//================================================================================
 
 	ROS_INFO("Mavel setup and running!");
 }
@@ -47,38 +86,99 @@ Mavel::~Mavel() {
 	//TODO: Remember to free tf broadcaster
 }
 
+//==-- Process:
+//Position Control
+//	Perform timing checks
+//	Check active
+//	Check reference data is fresh
+//	Check setpoint data is fresh
+//	(TF stuff here)
+//	Step PID controller
+//	Save data for feedback
 
-	//==-- Process:
-	//Position Control
-	//	Perform timing checks
-	//	Check active
-	//	Check reference data is fresh
-	//	Check setpoint data is fresh
-	//	(TF stuff here)
-	//	Step PID controller
-	//	Save data for feedback
+//Velocity Control
+//	Perform timing checks
+//	Check active
+//	Check reference data is fresh
+//	Check setpoint data is fresh
+//	(TF stuff here)
+//	Step PID controller
+//	Save data for feedback
 
-	//Velocity Control
-	//	Perform timing checks
-	//	Check active
-	//	Check reference data is fresh
-	//	Check setpoint data is fresh
-	//	(TF stuff here)
-	//	Step PID controller
-	//	Save data for feedback
+//Acceleration Control
+//	Perform timing checks
+//	Check setpoint data is fresh
+//	Calculate thrust vector
 
-	//Acceleration Control
-	//	Perform timing checks
-	//	Check setpoint data is fresh
-	//	Calculate thrust vector
+//Control Output
+//	Check whether orientation or body rate should be used (and integrate accel body rate if necessary)
+//	Do input masking as appropriate
+//	Send attitude target
+//	Send position, velocity, and acceleration feedback where relevant
 
-	//Control Output
-	//	Check whether orientation or body rate should be used (and integrate accel body rate if necessary)
-	//	Do input masking as appropriate
-	//	Send attitude target
-	//	Send position, velocity, and acceleration feedback where relevant
+void Mavel::reference_position_cb( const geometry_msgs::PoseStamped msg_in ) {
+	stream_reference_position_.data = msg_in;
+	stream_update( &stream_reference_position_ );
 }
 
+void Mavel::reference_velocity_cb( const geometry_msgs::TwistStamped msg_in ) {
+	stream_reference_velocity_.data = msg_in;
+	stream_update( &stream_reference_velocity_ );
+}
+
+void Mavel::setpoint_position_cb( const geometry_msgs::PoseStamped msg_in ) {
+	stream_setpoint_position_.data = msg_in;
+	stream_update( &stream_setpoint_position_ );
+}
+
+void Mavel::setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in ) {
+	stream_setpoint_velocity_.data = msg_in;
+	stream_update( &stream_setpoint_velocity_ );
+}
+
+void Mavel::setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in ) {
+	stream_setpoint_acceleration_.data = msg_in;
+	stream_update( &stream_setpoint_acceleration_ );
+}
+
+void Mavel::controller_position_cb( const ros::TimerEvent& ) {
+	if( ( stream_reference_position_.state == HEALTH_OK )  &&
+		( stream_setpoint_position_.state == HEALTH_OK ) ) {
+
+	}
+}
+
+void Mavel::controller_velocity_cb( const ros::TimerEvent& ) {
+	if( ( stream_reference_velocity_.state == HEALTH_OK )  &&
+		( stream_setpoint_velocity_.state == HEALTH_OK ) ) {
+
+	}
+}
+
+void Mavel::controller_acceleration_cb( const ros::TimerEvent& ) {
+	if( stream_setpoint_acceleration_.state == HEALTH_OK ) {
+
+	}
+}
+
+void Mavel::param_pid_init( mavel_params_pid* pid ) {
+
+}
+
+template<typename streamDataT>
+void Mavel::stream_init( mavel_data_stream<streamDataT>* stream ) {
+
+}
+
+template<typename streamDataT>
+void Mavel::stream_update( mavel_data_stream<streamDataT>* stream ) {
+
+}
+
+template<typename streamDataT>
+void Mavel::stream_check( mavel_data_stream<streamDataT>* stream, ros::Time time_now ) {
+
+}
 
 /*
 #include <ros/ros.h>

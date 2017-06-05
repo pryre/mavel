@@ -1,13 +1,15 @@
-#include <ros/ros.h>
+#pragma once
 #include <pidController/pidController.h>
+
+#include <ros/ros.h>
 
 #include <tf2/transform_datatypes.h>
 #include <tf2_ros/transform_listener.h>
-#include <tf2_ros/transform_broadcaster.h>
 
-#include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
-#include <geometry_msgs/Twist.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TwistStamped.h>
+#include <geometry_msgs/AccelStamped.h>
 
 #include <string>
 
@@ -30,7 +32,6 @@
 //		Velocity Control (Optional: set timout to 0.0):
 //			Reference:
 //				- Twist message
-//				- TF frame (internal twist estimate)
 //			Goal:
 //				- Twist message
 //			Feedback:
@@ -41,11 +42,11 @@
 //			Feedback:
 //				- Accel message
 
-enum {
-	HEALTH_ACTIVE = 0,
+enum mavel_data_stream_states {
+	HEALTH_OK = 0,
 	HEALTH_TIMOUT,
 	HEALTH_UNKNOWN
-} mavel_data_stream_states;
+};
 
 template<typename streamDataT> struct mavel_data_stream {
 	bool state;				//Whether the stream is reliable
@@ -54,7 +55,7 @@ template<typename streamDataT> struct mavel_data_stream {
 	ros::Duration timeout;	//How long to wait before a timeout
 	double count;			//The current data count since last timeout
 
-	string stream_topic;	//Name of the data stream (for console output)
+	std::string stream_topic;	//Name of the data stream (for console output)
 	streamDataT data;		//Latest data from the stream
 };
 
@@ -64,20 +65,31 @@ struct mavel_params_pid {
 	double kd;
 	double tau;
 
-	string param_base_name;	//Name of parameters to query the parameter server woth
-}
+	std::string param_base_name;	//Name of parameters to query the parameter server woth
+};
 
 class Mavel {
 	private:
 		ros::NodeHandle nh_;
-		ros::Publisher pub_ping_;
 
-		ros::Timer timer_tf_;
+		tf2_ros::Buffer tfbuffer_;
+		tf2_ros::TransformListener tfln_;
+
+		ros::Publisher pub_output_position_;
+		ros::Publisher pub_output_velocity_;
+		ros::Publisher pub_output_acceleration_;
+		ros::Publisher pub_output_attitude_;
+
+		ros::Subscriber sub_reference_position_;
+		ros::Subscriber sub_reference_velocity_;
+		ros::Subscriber sub_setpoint_position_;
+		ros::Subscriber sub_setpoint_velocity_;
+		ros::Subscriber sub_setpoint_acceleration_;
+
 		ros::Timer timer_control_position_;
 		ros::Timer timer_control_velocity_;
 		ros::Timer timer_control_acceleration_;
 
-		double param_rate_tf_lookups;
 		double param_rate_control_position_;
 		double param_rate_control_velocity_;
 		double param_rate_control_acceleration_;
@@ -108,13 +120,6 @@ class Mavel {
 
 		double integrator_body_rate_z_;
 
-		bool param_tf_reference_position_;
-		bool param_tf_reference_velocity_;
-		bool param_tf_setpoint_position_;
-		std::string tf_frame_world_;
-		std::string tf_frame_mav_;
-		std::string tf_frame_goal_;
-
 		std::string topic_input_position_reference_;
 		std::string topic_input_velocity_reference_;
 
@@ -132,15 +137,16 @@ class Mavel {
 
 		~Mavel( void );
 
-		void reference_position_cb( const geometry_msgs::PoseStamped::ConstPtr& msg_in );
-		void reference_velocity_cb( const geometry_msgs::TwistStamped::ConstPtr& msg_in );
 		//Handles all the TF requests as set by the params
 		//Calls the reference and setpoint callbacks to handle the actual data contained
-		void reference_tf_cb( const ros::TimerEvent& );
+		void tf_cb( const ros::TimerEvent& );
 
-		void setpoint_position_cb( const geometry_msgs::PoseStamped::ConstPtr& msg_in );
-		void setpoint_velocity_cb( const geometry_msgs::TwistStamped::ConstPtr& msg_in );
-		void setpoint_accel_cb( const geometry_msgs::AccelStamped::ConstPtr& msg_in );
+		void reference_position_cb( const geometry_msgs::PoseStamped msg_in );
+		void reference_velocity_cb( const geometry_msgs::TwistStamped msg_in );
+
+		void setpoint_position_cb( const geometry_msgs::PoseStamped msg_in );
+		void setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in );
+		void setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
 
 		//These will hanlde controller steps and publishing any feedback data
 		void controller_position_cb( const ros::TimerEvent& );	//Generates a velocity setpoint
@@ -153,12 +159,15 @@ class Mavel {
 		void param_pid_init( mavel_params_pid* pid );
 
 		//Initializes the stream parameters
-		void stream_init( mavel_data_stream* stream );
+		template<typename streamDataT>
+		void stream_init( mavel_data_stream<streamDataT>* stream );
 
 		//Updates the stream information that new data has been recieved
 		//New data should have already been added into the stream
-		void stream_update( mavel_data_stream* stream );
+		template<typename streamDataT>
+		void stream_update( mavel_data_stream<streamDataT>* stream );
 
 		//Checks the stream for a timeout
-		void stream_check( mavel_data_stream* stream, ros::Time time_now );
+		template<typename streamDataT>
+		void stream_check( mavel_data_stream<streamDataT>* stream, ros::Time time_now );
 };

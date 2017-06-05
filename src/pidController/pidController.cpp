@@ -1,6 +1,7 @@
 #include <pidController/pidController.h>
 
 #include <math.h>
+#include <assert.h>
 
 pidController::pidController( double initial_x, double initial_x_dot, double initial_setpoint, double initial_output, double Kp, double Ki, double Kd, double tau, double min_output, double max_output ) :
 	kp_( Kp ),
@@ -10,14 +11,16 @@ pidController::pidController( double initial_x, double initial_x_dot, double ini
 	x_( initial_x ),
 	x_dot_( initial_x_dot ),
 	sp_( initial_setpoint ),
-	output_control_( initial_output ) {
+	control_output_( initial_output ) {
 
 	setOutputMinMax( min_output, max_output );
 
 	this->reset();
 }
 
-pidController::~pidController();
+pidController::~pidController() {
+
+}
 
 void pidController::reset() {
 	this->reset( x_ );
@@ -26,7 +29,6 @@ void pidController::reset() {
 void pidController::reset( double x_prev ) {
 	integrator_ = 0.0f;
 	x_prev_ = x_prev;
-	time_prev_ = 0.0f;
 }
 
 void pidController::setKp( double Kp ) {
@@ -60,7 +62,7 @@ void pidController::setOutputMinMax( double min, double max ) {
 }
 
 //Calculate x_dot
-double step(double dt, double sp, double x) {
+double pidController::step( double dt, double sp, double x ) {
 	//Check to make sure the controller hasn't gone stale
 	if( dt > 1.0f ) {
 		this->reset( x );
@@ -69,16 +71,19 @@ double step(double dt, double sp, double x) {
 
 	//Calculate D term (use dirty derivative if we don't have access to a measurement of the derivative)
 	//The dirty derivative is a sort of low-pass filtered version of the derivative.
-	double x_dot = ( ( 2.0f * tau_ - dt ) / ( 2.0f * tau_ + dt ) * x_dot_ ) + ( 2.0f / ( 2.0f * tau_ + dt ) * (x - prev_x_) );
+	double x_dot = ( ( 2.0f * tau_ - dt ) / ( 2.0f * tau_ + dt ) * x_dot_ ) + ( 2.0f / ( 2.0f * tau_ + dt ) * ( x - x_prev_ ) );
 
-	this->step(dt, sp, x, x_dot);
+	double output = this->step( dt, sp, x, x_dot );
+
+	//Save last state
+	x_prev_ = x;
+
+	return output;
 }
 
 //Calculate control step with known x_dot
 //	time_now: Current time in seconds
-double step(double dt, double sp, double x, double x_dot) {
-	double dt = time_now - prev_time_;
-	prev_time_ = time_now;
+double pidController::step( double dt, double sp, double x, double x_dot ) {
 	x_dot_ = x_dot;
 
 	//Check to make sure the controller hasn't gone stale
@@ -110,18 +115,15 @@ double step(double dt, double sp, double x, double x_dot) {
 	}
 
 	//Sum three terms: u = p_term + i_term - d_term
-	fix16_t u = p_term + i_term - d_term;
+	double u = p_term + i_term - d_term;
 
 	//Output Saturation
-	fix16_t u_sat = ( u > output_max_ ) ? output_max_ : ( (u < output_min_ ) ? output_min_ : u );
+	double u_sat = ( u > output_max_ ) ? output_max_ : ( (u < output_min_ ) ? output_min_ : u );
 
 	//Integrator anti-windup
 	//If the pid controller has saturated and if the integrator is the cause
-	if( ( u != u_sat ) && ( fabs( i_term ) > fabs( u - p_term - d_term) ) ) {
-			integrator_ = (u_sat - p_term - d_term ) / ki_;	//Trim the integrator to what it should currently be to only just hit the maximum
-
-	//Save last state
-	prev_x_ = x;
+	if( ( u != u_sat ) && ( fabs( i_term ) > fabs( u - p_term - d_term ) ) )
+			integrator_ = ( u_sat - p_term - d_term ) / ki_;	//Trim the integrator to what it should currently be to only just hit the maximum
 
 	//Set output
 	control_output_ = u_sat;
@@ -130,15 +132,15 @@ double step(double dt, double sp, double x, double x_dot) {
 }
 
 double pidController::getKp() {
-	return Kp_;
+	return kp_;
 }
 
 double pidController::getKi() {
-	return Ki_;
+	return ki_;
 }
 
 double pidController::getKd() {
-	return Kd_;
+	return kd_;
 }
 
 double pidController::getTau() {
@@ -154,5 +156,5 @@ double pidController::getOutputMax() {
 }
 
 double pidController::getOutput() {
-	return output_control_;
+	return control_output_;
 }
