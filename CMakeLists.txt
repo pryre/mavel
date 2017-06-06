@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   mavros_msgs
+  nav_msgs
 )
 
 add_definitions(-std=c++11)

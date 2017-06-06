@@ -7,6 +7,7 @@
 #include <tf2_ros/transform_listener.h>
 
 #include <geometry_msgs/TransformStamped.h>
+#include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/AccelStamped.h>
@@ -82,8 +83,7 @@ class Mavel {
 		ros::Publisher pub_output_acceleration_;
 		ros::Publisher pub_output_attitude_;
 
-		ros::Subscriber sub_reference_position_;
-		ros::Subscriber sub_reference_velocity_;
+		ros::Subscriber sub_reference_odometry_;
 		ros::Subscriber sub_setpoint_position_;
 		ros::Subscriber sub_setpoint_velocity_;
 		ros::Subscriber sub_setpoint_acceleration_;
@@ -98,14 +98,12 @@ class Mavel {
 
 		//Rate in Hz
 		//Required stream count is derived as 2*rate
-		double param_stream_min_rate_reference_position_;
-		double param_stream_min_rate_reference_velocity_;
+		double param_stream_min_rate_reference_odometry_;
 		double param_stream_min_rate_setpoint_position_;
 		double param_stream_min_rate_setpoint_velocity_;
 		double param_stream_min_rate_setpoint_acceleration_;
 
-		mavel_data_stream<geometry_msgs::PoseStamped> stream_reference_position_;
-		mavel_data_stream<geometry_msgs::TwistStamped> stream_reference_velocity_;
+		mavel_data_stream<nav_msgs::Odometry> stream_reference_odometry_;
 		mavel_data_stream<geometry_msgs::PoseStamped> stream_setpoint_position_;
 		mavel_data_stream<geometry_msgs::TwistStamped> stream_setpoint_velocity_;
 		mavel_data_stream<geometry_msgs::AccelStamped> stream_setpoint_acceleration_;
@@ -128,8 +126,7 @@ class Mavel {
 
 		std::string param_control_frame_id_;
 
-		std::string topic_input_position_reference_;
-		std::string topic_input_velocity_reference_;
+		std::string topic_input_odometry_reference_;
 
 		std::string topic_input_position_setpoint_;
 		std::string topic_input_velocity_setpoint_;
@@ -145,8 +142,7 @@ class Mavel {
 
 		~Mavel( void );
 
-		void reference_position_cb( const geometry_msgs::PoseStamped msg_in );
-		void reference_velocity_cb( const geometry_msgs::TwistStamped msg_in );
+		void reference_odometry_cb( const nav_msgs::Odometry msg_in );
 		void setpoint_position_cb( const geometry_msgs::PoseStamped msg_in );
 		void setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in );
 		void setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
