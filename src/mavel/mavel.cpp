@@ -6,6 +6,7 @@
 #include <tf2/transform_datatypes.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
@@ -233,6 +234,9 @@ void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
 	geometry_msgs::AccelStamped goal_accel;
 	mavros_msgs::AttitudeTarget goal_att;
 
+	tf2::Transform ref_tf;
+	tf2::Vector3 ref_vel;
+
 	goal_att.orientation.w = 1.0;	//Just to make sure the quaternion is initialized correctly
 
 	double dt = (timerCallback.current_real - timerCallback.last_real).toSec();
@@ -242,29 +246,49 @@ void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
 	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_, timerCallback.current_real ) == HEALTH_OK;
 	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_, timerCallback.current_real ) == HEALTH_OK;
 
-	if( stream_sp_accel_ok ) {
-		goal_accel = stream_setpoint_acceleration_.data;
-		do_control_accel = true;
-	} else if( stream_sp_vel_ok && stream_ref_odom_ok ) {
-		goal_vel = stream_setpoint_velocity_.data;
+	if( stream_ref_odom_ok ) {
+		if( stream_sp_accel_ok ) {
+			goal_accel = stream_setpoint_acceleration_.data;
+			do_control_accel = true;
+		} else if( stream_sp_vel_ok ) {
+			goal_vel = stream_setpoint_velocity_.data;
 
-		do_control_vel = true;
-		do_control_accel = true;
-	} else if ( stream_sp_pos_ok && stream_ref_odom_ok ){
-		goal_pos = stream_setpoint_position_.data;
+			do_control_vel = true;
+			do_control_accel = true;
+		} else if ( stream_sp_pos_ok ){
+			goal_pos = stream_setpoint_position_.data;
 
-		do_control_pos = true;
-		do_control_vel = true;
-		do_control_accel = true;
-	} else if ( stream_ref_odom_ok ) {
-		do_control_vel = true;
-		do_control_accel = true;
+			do_control_pos = true;
+			do_control_vel = true;
+			do_control_accel = true;
+		} else {
+			goal_vel.header.frame_id = param_control_frame_id_;
+			goal_vel.header.stamp = timerCallback.current_real;
+			goal_vel.twist.linear.z = -0.2;	//TODO: Parameter
 
-		goal_vel.header.frame_id = param_control_frame_id_;
-		goal_vel.header.stamp = timerCallback.current_real;
-		goal_vel.twist.linear.z = -0.2;	//TODO: Parameter
+			do_control_vel = true;
+			do_control_accel = true;
+			ROS_ERROR_THROTTLE( 2.0, "No setpoint data, failsafe landing mode!");
+		}
 
-		ROS_ERROR_THROTTLE( 2.0, "No setpoint data, failsafe landing mode!");
+		tf2::Vector3 tmp_pos( stream_reference_odometry_.data.pose.pose.position.x,
+							  stream_reference_odometry_.data.pose.pose.position.y,
+							  stream_reference_odometry_.data.pose.pose.position.z );
+
+		tf2::Quaternion tmp_q( stream_reference_odometry_.data.pose.pose.orientation.x,
+							   stream_reference_odometry_.data.pose.pose.orientation.y,
+							   stream_reference_odometry_.data.pose.pose.orientation.z,
+							   stream_reference_odometry_.data.pose.pose.orientation.w );
+
+		ref_tf = tf2::Transform( tmp_q, tmp_pos );
+
+		tf2::Quaternion rot_vel;
+		rot_vel = ( tmp_q * tf2::Quaternion( stream_reference_odometry_.data.twist.twist.linear.x,
+										   stream_reference_odometry_.data.twist.twist.linear.y,
+										   stream_reference_odometry_.data.twist.twist.linear.z,
+										   0.0 ) ) * tmp_q.inverse();
+
+		ref_vel = tf2::Vector3( rot_vel.getX(), rot_vel.getY(), rot_vel.getZ() );
 	}
 
 	//If we have a setpoint stream that is OK, and a
@@ -274,23 +298,14 @@ void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
 			goal_vel.header.frame_id = param_control_frame_id_;
 			goal_vel.header.stamp = timerCallback.current_real;
 
-			goal_vel.twist.linear.x = controller_pos_x.step( dt,
-															 goal_pos.pose.position.x,
-															 stream_reference_odometry_.data.pose.pose.position.x,
-															 stream_reference_odometry_.data.twist.twist.linear.x );
-			goal_vel.twist.linear.y = controller_pos_y.step( dt,
-															 goal_pos.pose.position.y,
-															 stream_reference_odometry_.data.pose.pose.position.y,
-															 stream_reference_odometry_.data.twist.twist.linear.y );
-			goal_vel.twist.linear.z = controller_pos_z.step( dt,
-															 goal_pos.pose.position.z,
-															 stream_reference_odometry_.data.pose.pose.position.z,
-															 stream_reference_odometry_.data.twist.twist.linear.z );
+			goal_vel.twist.linear.x = controller_pos_x.step( dt, goal_pos.pose.position.x, ref_tf.getOrigin().getX(), ref_vel.getX() );
+			goal_vel.twist.linear.y = controller_pos_y.step( dt, goal_pos.pose.position.y, ref_tf.getOrigin().getY(), ref_vel.getY() );
+			goal_vel.twist.linear.z = controller_pos_z.step( dt, goal_pos.pose.position.z, ref_tf.getOrigin().getZ(), ref_vel.getZ() );
 		} else {
 			//Prevent PID wind-up
-			controller_pos_x.reset( stream_reference_odometry_.data.pose.pose.position.x );
-			controller_pos_y.reset( stream_reference_odometry_.data.pose.pose.position.y );
-			controller_pos_z.reset( stream_reference_odometry_.data.pose.pose.position.z );
+			controller_pos_x.reset( ref_tf.getOrigin().getX() );
+			controller_pos_y.reset( ref_tf.getOrigin().getY() );
+			controller_pos_z.reset( ref_tf.getOrigin().getZ() );
 		}
 
 		//Velocity Controller
@@ -298,20 +313,14 @@ void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
 			goal_accel.header.frame_id = stream_setpoint_velocity_.data.header.frame_id;
 			goal_accel.header.stamp = timerCallback.current_real;
 
-			goal_accel.accel.linear.x = controller_vel_x.step( dt,
-															   goal_vel.twist.linear.x,
-															   stream_reference_odometry_.data.twist.twist.linear.x );
-			goal_accel.accel.linear.y = controller_vel_y.step( dt,
-															   goal_vel.twist.linear.y,
-															   stream_reference_odometry_.data.twist.twist.linear.y );
-			goal_accel.accel.linear.z = controller_vel_z.step( dt,
-															   goal_vel.twist.linear.z,
-															   stream_reference_odometry_.data.twist.twist.linear.z );
+			goal_accel.accel.linear.x = controller_vel_x.step( dt, goal_vel.twist.linear.x, ref_vel.getX() );
+			goal_accel.accel.linear.y = controller_vel_y.step( dt, goal_vel.twist.linear.y, ref_vel.getY() );
+			goal_accel.accel.linear.z = controller_vel_z.step( dt, goal_vel.twist.linear.z, ref_vel.getZ() );
 		} else {
 			//Prevent PID wind-up
-			controller_vel_x.reset( stream_reference_odometry_.data.twist.twist.linear.x );
-			controller_vel_y.reset( stream_reference_odometry_.data.twist.twist.linear.y );
-			controller_vel_z.reset( stream_reference_odometry_.data.twist.twist.linear.z );
+			controller_vel_x.reset( ref_vel.getX() );
+			controller_vel_y.reset( ref_vel.getY() );
+			controller_vel_z.reset( ref_vel.getZ() );
 		}
 
 		if( do_control_accel ) {
@@ -360,64 +369,63 @@ void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
 			}
 
 			//Create body_x, body_y, body_z
-			tf2::Vector3 body_x;
-			tf2::Vector3 body_y;
-			tf2::Vector3 body_z;
+			tf2::Vector3 thrust_x;
+			tf2::Vector3 thrust_y;
+			tf2::Vector3 thrust_z;
 
 			//thrust_abs > SIGMA
-			if( gThrust.length() > SIGMA) {
+			if( gThrust.length() > SIGMA ) {
 				//Get the direction of the thrust vector (and rotate to the body frame)
-				body_z = gThrust.normalized();
+				thrust_z = gThrust.normalized();
 			} else {
 				//No thrust commanded, align with straight up
-				body_z.setZ( 1.0 );
+				thrust_z.setZ( 1.0 );
 				//ROS_INFO("No thrust command, keeping zero Z orientation!");
 			}
 
-			double yaw_c = 0.0;
+			double roll_c, pitch_c, yaw_c;
 
 			if( do_control_pos ) {
-				double roll_c, pitch_c;
 				tf2::Quaternion q_c( goal_pos.pose.orientation.x,
-									 goal_pos.pose.orientation.x,
-									 goal_pos.pose.orientation.x,
+									 goal_pos.pose.orientation.y,
+									 goal_pos.pose.orientation.z,
 									 goal_pos.pose.orientation.w );
 
 				tf2::Matrix3x3( q_c ).getRPY( roll_c, pitch_c, yaw_c );
 			}
 
 			//Check to make sure the thrust vector is in the Z axis, or on the XY plane
-			if (fabs(body_z.getZ()) > SIGMA) {
-				//Get a vector that aligns the Y axis with pi/2
-				tf2::Vector3 yaw_r( sin( yaw_c ), cos( yaw_c ), 0.0 );
+			if ( fabs( thrust_z.getZ() ) > SIGMA ) {
+				//Get a vector that aligns the Y axis with goal yaw
+				tf2::Vector3 yaw_r( -sin( yaw_c ), cos( yaw_c ), 0.0 );
 				//Get the orthagonal vector to that (which will have correct pitch)
-				body_x = yaw_r.cross( body_z );
+				thrust_x = yaw_r.cross( thrust_z );
 
 				//keep nose to front while inverted upside down
-				if (body_z.getZ() < 0.0)
-					body_x = -body_x;
+				if (thrust_z.getZ() < 0.0)
+					thrust_x = -thrust_x;
 
-				body_x.normalize();
+				thrust_x.normalize();
 			} else {
 				// desired thrust is in XY plane, set X downside to construct correct matrix,
 				// but yaw component will not be used actually
-				body_x.setZ( 1.0 );
+				thrust_x.setZ( 1.0 );
 				ROS_INFO( "No thrust command, keeping zero XY orientation!" );
 			}
 
 			//Align the Y axis to be orthoganal with XZ plane
-			body_y = body_z.cross(body_x);
+			thrust_y = thrust_z.cross( thrust_x );
 
 			//Get rotation matrix
-			tf2::Matrix3x3 R( body_x.getX(),
-							  body_y.getX(),
-							  body_z.getX(),
-							  body_x.getY(),
-							  body_y.getY(),
-							  body_z.getY(),
-							  body_x.getZ(),
-							  body_y.getZ(),
-							  body_z.getZ() );
+			tf2::Matrix3x3 R( thrust_x.getX(),
+							  thrust_y.getX(),
+							  thrust_z.getX(),
+							  thrust_x.getY(),
+							  thrust_y.getY(),
+							  thrust_z.getY(),
+							  thrust_x.getZ(),
+							  thrust_y.getZ(),
+							  thrust_z.getZ() );
 
 			//Get quaternion from R
 			R.getRotation( goalThrustRotation );
@@ -451,9 +459,9 @@ void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
 		controller_pos_x.reset( stream_reference_odometry_.data.pose.pose.position.x );
 		controller_pos_y.reset( stream_reference_odometry_.data.pose.pose.position.y );
 		controller_pos_z.reset( stream_reference_odometry_.data.pose.pose.position.z );
-		controller_vel_x.reset( stream_reference_odometry_.data.twist.twist.linear.x );
-		controller_vel_y.reset( stream_reference_odometry_.data.twist.twist.linear.y );
-		controller_vel_z.reset( stream_reference_odometry_.data.twist.twist.linear.z );
+		controller_vel_x.reset( ref_vel.getX() );
+		controller_vel_y.reset( ref_vel.getY() );
+		controller_vel_z.reset( ref_vel.getZ() );
 		integrator_body_rate_z_ = 0.0;
 
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE | goal_att.IGNORE_ATTITUDE;
