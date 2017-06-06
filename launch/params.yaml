@@ -23,17 +23,17 @@ stream:
       acceleration: 20.0
   topic:
     reference:
-      position: "~reference/position"
-      velocity: "~reference/velocity"
+      position: "reference/position"
+      velocity: "reference/velocity"
     setpoint:
-      position: "~setpoint/position"
-      velocity: "~setpoint/velocity"
-      acceleration: "~setpoint/acceleration"
+      position: "setpoint/position"
+      velocity: "setpoint/velocity"
+      acceleration: "setpoint/acceleration"
     feedback:
-      position: "~goal/position"
-      velocity: "~goal/velocity"
-      acceleration: "~goal/acceleration"
-      attitude: "~goal/attitude"
+      position: "goal/position"
+      velocity: "goal/velocity"
+      acceleration: "goal/acceleration"
+      attitude: "goal/attitude"
 
 # PID Controllers
 pid:

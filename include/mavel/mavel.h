@@ -44,12 +44,12 @@
 
 enum mavel_data_stream_states {
 	HEALTH_OK = 0,
-	HEALTH_TIMOUT,
+	HEALTH_TIMEOUT,
 	HEALTH_UNKNOWN
 };
 
 template<typename streamDataT> struct mavel_data_stream {
-	bool state;				//Whether the stream is reliable
+	mavel_data_stream_states state;				//Whether the stream is reliable
 
 	ros::Duration timeout;	//How long to wait before a timeout
 	uint64_t count;			//The current data count since last timeout
@@ -88,7 +88,7 @@ class Mavel {
 		ros::Subscriber sub_setpoint_velocity_;
 		ros::Subscriber sub_setpoint_acceleration_;
 
-		ros::Timer timer_controlller_;
+		ros::Timer timer_controller_;
 
 		double param_rate_control_;
 		double param_tilt_max_;
@@ -98,11 +98,11 @@ class Mavel {
 
 		//Rate in Hz
 		//Required stream count is derived as 2*rate
-		double param_stream_min_rate_position_reference_;
-		double param_stream_min_rate_velocity_reference_;
-		double param_stream_min_rate_position_setpoint_;
-		double param_stream_min_rate_velocity_setpoint_;
-		double param_stream_min_rate_acceleration_setpoint_;
+		double param_stream_min_rate_reference_position_;
+		double param_stream_min_rate_reference_velocity_;
+		double param_stream_min_rate_setpoint_position_;
+		double param_stream_min_rate_setpoint_velocity_;
+		double param_stream_min_rate_setpoint_acceleration_;
 
 		mavel_data_stream<geometry_msgs::PoseStamped> stream_reference_position_;
 		mavel_data_stream<geometry_msgs::TwistStamped> stream_reference_velocity_;
@@ -145,21 +145,14 @@ class Mavel {
 
 		~Mavel( void );
 
-		//Handles all the TF requests as set by the params
-		//Calls the reference and setpoint callbacks to handle the actual data contained
-		void tf_cb( const ros::TimerEvent& );
-
 		void reference_position_cb( const geometry_msgs::PoseStamped msg_in );
 		void reference_velocity_cb( const geometry_msgs::TwistStamped msg_in );
-
 		void setpoint_position_cb( const geometry_msgs::PoseStamped msg_in );
 		void setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in );
 		void setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
 
-		//These will hanlde controller steps and publishing any feedback data
-		void controller_position_cb( const ros::TimerEvent& );	//Generates a velocity setpoint
-		void controller_velocity_cb( const ros::TimerEvent& );	//Generates an acceleration setpoint
-		void controller_acceleration_cb( const ros::TimerEvent& );	//Generates the attitude target
+		//Handles the controller loop
+		void controller_cb( const ros::TimerEvent& timerCallback );
 
 	private:
 		//Initializes the pid parameters for a controller
@@ -168,14 +161,14 @@ class Mavel {
 
 		//Initializes the stream parameters
 		template<typename streamDataT>
-		void stream_init( mavel_data_stream<streamDataT>* stream, double min_rate, std::string topic );
+		void stream_init( mavel_data_stream<streamDataT>* stream, const double min_rate, const std::string topic );
 
 		//Updates the stream information that new data has been recieved
 		//New data should have already been added into the stream
 		template<typename streamDataT>
-		void stream_update( mavel_data_stream<streamDataT>* stream, <streamDataT>* data );
+		void stream_update( mavel_data_stream<streamDataT>* stream, const streamDataT* data );
 
 		//Checks the stream for a timeout
 		template<typename streamDataT>
-		mavel_data_stream_states stream_check( mavel_data_stream<streamDataT>* stream, ros::Time time_now );
+		mavel_data_stream_states stream_check( mavel_data_stream<streamDataT>* stream, const ros::Time time_now );
 };

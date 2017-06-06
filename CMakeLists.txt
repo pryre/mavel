@@ -124,8 +124,8 @@ include_directories(
 )
 
 ## Declare a C++ library
-add_library(${PROJECT_NAME}
-  src/${PROJECT_NAME}/mavel.cpp
+add_library(mavel
+  src/mavel/mavel.cpp
 )
 
 add_library(pidController
@@ -148,7 +148,8 @@ add_dependencies(tf_helper_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXP
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(mavel_node
-  ${PROJECT_NAME}
+  mavel
+  pidController
   ${catkin_LIBRARIES}
 )
 

@@ -19,7 +19,7 @@
 #include <mavros_msgs/AttitudeTarget.h>
 
 #include <string>
-#include <math>
+#include <math.h>
 
 #define SIGMA			0.000001f
 #define MIN_DIST		0.01f
@@ -29,23 +29,23 @@ Mavel::Mavel() :
 	tfln_( tfbuffer_ ),
 	integrator_body_rate_z_( 0.0f ) {
 
-	nh_.param( "~control_rate", param_rate_control_, param_rate_control_ );
+	nh_.param( "control_rate", param_rate_control_, param_rate_control_ );
 
-	nh_.param( "~tilt_max", param_tilt_max_, param_tilt_max_ );
+	nh_.param( "tilt_max", param_tilt_max_, param_tilt_max_ );
 
-	nh_.param( "~throttle/min", param_throttle_min_, param_throttle_min_ );
-	nh_.param( "~throttle/mid", param_throttle_mid_, param_throttle_mid_ );
-	nh_.param( "~throttle/max", param_throttle_max_, param_throttle_max_ );
+	nh_.param( "throttle/min", param_throttle_min_, param_throttle_min_ );
+	nh_.param( "throttle/mid", param_throttle_mid_, param_throttle_mid_ );
+	nh_.param( "throttle/max", param_throttle_max_, param_throttle_max_ );
 
-	nh_.param( "~control_frame", param_control_frame_id_, param_control_frame_id_ );
+	nh_.param( "control_frame", param_control_frame_id_, param_control_frame_id_ );
 
 	//PID Controllers
-	param_pid_init( &param_pid_pos_x, "~pid/position/x" );
-	param_pid_init( &param_pid_pos_y, "~pid/position/y" );
-	param_pid_init( &param_pid_pos_z, "~pid/position/z" );
-	param_pid_init( &param_pid_vel_x, "~pid/velocity/x" );
-	param_pid_init( &param_pid_vel_y, "~pid/velocity/y" );
-	param_pid_init( &param_pid_vel_z, "~pid/velocity/z" );
+	param_pid_init( &param_pid_pos_x, "pid/position/x" );
+	param_pid_init( &param_pid_pos_y, "pid/position/y" );
+	param_pid_init( &param_pid_pos_z, "pid/position/z" );
+	param_pid_init( &param_pid_vel_x, "pid/velocity/x" );
+	param_pid_init( &param_pid_vel_y, "pid/velocity/y" );
+	param_pid_init( &param_pid_vel_z, "pid/velocity/z" );
 
 	controller_pos_x.setGains( param_pid_pos_x.kp, param_pid_pos_x.ki, param_pid_pos_x.kd, param_pid_pos_x.tau );
 	controller_pos_x.setOutputMinMax( param_pid_pos_x.min, param_pid_pos_x.max );
@@ -62,46 +62,39 @@ Mavel::Mavel() :
 	controller_vel_z.setOutputMinMax( param_pid_vel_z.min, param_pid_vel_z.max );
 
 	//Data streams
-	nh_.param( "~stream/min_rate/reference/position", param_stream_min_rate_position_reference_, param_stream_min_rate_position_reference_);
-	nh_.param( "~stream/min_rate/reference/velocity", param_stream_min_rate_velocity_reference_, param_stream_min_rate_velocity_reference_);
-	nh_.param( "~stream/min_rate/setpoint/position", param_stream_min_rate_position_setpoint_, param_stream_min_rate_position_setpoint_);
-	nh_.param( "~stream/min_rate/setpoint/velocity", param_stream_min_rate_velocity_setpoint_, param_stream_min_rate_velocity_setpoint_);
-	nh_.param( "~stream/min_rate/setpoint/acceleration", param_stream_min_rate_acceleration_setpoint_, param_stream_min_rate_acceleration_setpoint_);
+	nh_.param( "stream/min_rate/reference/position", param_stream_min_rate_reference_position_, param_stream_min_rate_reference_position_);
+	nh_.param( "stream/min_rate/reference/velocity", param_stream_min_rate_reference_velocity_, param_stream_min_rate_reference_velocity_);
+	nh_.param( "stream/min_rate/setpoint/position", param_stream_min_rate_setpoint_position_, param_stream_min_rate_setpoint_position_);
+	nh_.param( "stream/min_rate/setpoint/velocity", param_stream_min_rate_setpoint_velocity_, param_stream_min_rate_setpoint_velocity_);
+	nh_.param( "stream/min_rate/setpoint/acceleration", param_stream_min_rate_setpoint_acceleration_, param_stream_min_rate_setpoint_acceleration_);
 
-	nh_.param( "~stream/topic/reference/position", topic_input_position_reference_, topic_input_position_reference_);
-	nh_.param( "~stream/topic/reference/velocity", topic_input_velocity_reference_, topic_input_velocity_reference_);
+	nh_.param( "stream/topic/reference/position", topic_input_position_reference_, topic_input_position_reference_);
+	nh_.param( "stream/topic/reference/velocity", topic_input_velocity_reference_, topic_input_velocity_reference_);
 
-	nh_.param( "~stream/topic/setpoint/position", topic_input_position_setpoint_, topic_input_position_setpoint_);
-	nh_.param( "~stream/topic/setpoint/velocity", topic_input_velocity_setpoint_, topic_input_acceleration_setpoint_);
-	nh_.param( "~stream/topic/setpoint/acceleration", topic_input_acceleration_setpoint_, topic_input_acceleration_setpoint_);
+	nh_.param( "stream/topic/setpoint/position", topic_input_position_setpoint_, topic_input_position_setpoint_);
+	nh_.param( "stream/topic/setpoint/velocity", topic_input_velocity_setpoint_, topic_input_acceleration_setpoint_);
+	nh_.param( "stream/topic/setpoint/acceleration", topic_input_acceleration_setpoint_, topic_input_acceleration_setpoint_);
 
-	nh_.param( "~stream/topic/feedback/position", topic_output_position_, topic_output_position_);
-	nh_.param( "~stream/topic/feedback/velocity", topic_output_velocity_, topic_output_velocity_);
-	nh_.param( "~stream/topic/feedback/acceleration", topic_output_acceleration_, topic_output_acceleration_);
-	nh_.param( "~stream/topic/feedback/acceleration", topic_output_attitude_, topic_output_attitude_);
+	nh_.param( "stream/topic/feedback/position", topic_output_position_, topic_output_position_);
+	nh_.param( "stream/topic/feedback/velocity", topic_output_velocity_, topic_output_velocity_);
+	nh_.param( "stream/topic/feedback/acceleration", topic_output_acceleration_, topic_output_acceleration_);
+	nh_.param( "stream/topic/feedback/attitude", topic_output_attitude_, topic_output_attitude_);
 
-	stream_init( &stream_reference_position_, param_timeout_stream_reference_position_, topic_input_position_reference_ );
-	stream_init( &stream_reference_velocity_, param_timeout_stream_reference_velocity_, topic_input_velocity_reference_ );
-	stream_init( &stream_setpoint_position_, param_timeout_stream_setpoint_position_, topic_input_position_setpoint_ );
-	stream_init( &stream_setpoint_velocity_, param_timeout_stream_setpoint_velocity_, topic_input_velocity_setpoint_ );
-	stream_init( &stream_setpoint_acceleration_, param_timeout_stream_setpoint_acceleration_, topic_input_acceleration_setpoint_ );
+	stream_init( &stream_reference_position_, 1.0f / param_stream_min_rate_reference_position_, topic_input_position_reference_ );
+	stream_init( &stream_reference_velocity_, 1.0f / param_stream_min_rate_reference_velocity_, topic_input_velocity_reference_ );
+	stream_init( &stream_setpoint_position_, 1.0f / param_stream_min_rate_setpoint_position_, topic_input_position_setpoint_ );
+	stream_init( &stream_setpoint_velocity_, 1.0f / param_stream_min_rate_setpoint_velocity_, topic_input_velocity_setpoint_ );
+	stream_init( &stream_setpoint_acceleration_, 1.0f / param_stream_min_rate_setpoint_acceleration_, topic_input_acceleration_setpoint_ );
 
-	//Publishers for control feedback
+	//Publishers
 	pub_output_attitude_ = nh_.advertise<mavros_msgs::AttitudeTarget>( topic_output_attitude_, 100 );
 	pub_output_acceleration_ = nh_.advertise<geometry_msgs::AccelStamped>( topic_output_acceleration_, 100 );
 	pub_output_velocity_ = nh_.advertise<geometry_msgs::TwistStamped>( topic_output_velocity_, 100 );
 	pub_output_position_ = nh_.advertise<geometry_msgs::PoseStamped>( topic_output_position_, 100 );
 
-	//Subscribers for reference input
-	if( !param_external_acceleration_setpoint ) {
-		sub_reference_velocity_ = nh_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_reference_, 100, &Mavel::setpoint_velocity_cb, this );
-
-		if( !param_external_velocity_setpoint ) {
-				sub_reference_position_ = nh_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_reference_, 100, &Mavel::setpoint_position_cb, this );
-		}
-	}
-
-	//Subscribers for setpoint input
+	//Subscribers
+	sub_reference_velocity_ = nh_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_reference_, 100, &Mavel::setpoint_velocity_cb, this );
+	sub_reference_position_ = nh_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_reference_, 100, &Mavel::setpoint_position_cb, this );
 	sub_setpoint_acceleration_ = nh_.subscribe<geometry_msgs::AccelStamped>( topic_input_acceleration_setpoint_, 100, &Mavel::setpoint_acceleration_cb, this );
 	sub_setpoint_velocity_ = nh_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_setpoint_, 100, &Mavel::setpoint_velocity_cb, this );
 	sub_setpoint_position_ = nh_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_setpoint_, 100, &Mavel::setpoint_position_cb, this );
@@ -166,16 +159,16 @@ void Mavel::setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in )
 	stream_update( &stream_setpoint_acceleration_, &msg_in );
 }
 
-void Mavel::controller_cb( const ros::TimerEvent& ) {
+void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
 	bool do_control_pos = false;
 	bool do_control_vel = false;
 	bool do_control_accel = false;
 
-	bool stream_ref_pos_ok = stream_check( &stream_reference_position_ ) == HEALTH_OK;
-	bool stream_ref_vel_ok = stream_check( &stream_reference_velocity_ ) == HEALTH_OK;
-	bool stream_sp_pos_ok = stream_check( &stream_setpoint_position_ ) == HEALTH_OK;
-	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_ ) == HEALTH_OK;
-	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_ ) == HEALTH_OK;
+	bool stream_ref_pos_ok = stream_check( &stream_reference_position_, timerCallback.current_real ) == HEALTH_OK;
+	bool stream_ref_vel_ok = stream_check( &stream_reference_velocity_, timerCallback.current_real ) == HEALTH_OK;
+	bool stream_sp_pos_ok = stream_check( &stream_setpoint_position_, timerCallback.current_real ) == HEALTH_OK;
+	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_, timerCallback.current_real ) == HEALTH_OK;
+	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_, timerCallback.current_real ) == HEALTH_OK;
 
 	geometry_msgs::PoseStamped goal_pos;
 	geometry_msgs::TwistStamped goal_vel;
@@ -187,7 +180,7 @@ void Mavel::controller_cb( const ros::TimerEvent& ) {
 	double dt = (timerCallback.current_real - timerCallback.last_real).toSec();
 
 	if( stream_sp_accel_ok ) {
-		goal_accel = stream_setpoint_velocity_.data;
+		goal_accel = stream_setpoint_acceleration_.data;
 		do_control_accel = true;
 	} else if( stream_sp_vel_ok && stream_ref_vel_ok ) {
 		goal_vel = stream_setpoint_velocity_.data;
@@ -233,31 +226,32 @@ void Mavel::controller_cb( const ros::TimerEvent& ) {
 			goal_accel.header.frame_id = stream_setpoint_velocity_.data.header.frame_id;
 			goal_accel.header.stamp = timerCallback.current_real;
 
-			goal_accel.twist.linear.x = controller_vel_x.step( dt,
+			goal_accel.accel.linear.x = controller_vel_x.step( dt,
 															   goal_vel.twist.linear.x,
 															   stream_reference_velocity_.data.twist.linear.x );
-			goal_accel.twist.linear.y = controller_vel_y.step( dt,
+			goal_accel.accel.linear.y = controller_vel_y.step( dt,
 															   goal_vel.twist.linear.y,
 															   stream_reference_velocity_.data.twist.linear.y );
-			goal_accel.twist.linear.z = controller_vel_z.step( dt,
+			goal_accel.accel.linear.z = controller_vel_z.step( dt,
 															   goal_vel.twist.linear.z,
 															   stream_reference_velocity_.data.twist.linear.z );
 		} else {
 			//Prevent PID wind-up
-			controller_vel_x.reset( stream_reference_position_.data.twist.linear.x );
-			controller_vel_y.reset( stream_reference_position_.data.twist.linear.y );
-			controller_vel_z.reset( stream_reference_position_.data.twist.linear.z );
+			controller_vel_x.reset( stream_reference_velocity_.data.twist.linear.x );
+			controller_vel_y.reset( stream_reference_velocity_.data.twist.linear.y );
+			controller_vel_z.reset( stream_reference_velocity_.data.twist.linear.z );
 		}
 
 		if( do_control_accel ) {
 			//Calculate goal accelerations
-			double Tx = vel_x_pid.step(goalVelocity.twist.linear.x, bodyVelocity.linear.x );
-			double Ty = vel_y_pid.step(goalVelocity.twist.linear.y, bodyVelocity.linear.y );
-			double Tz = vel_z_pid.step(goalVelocity.twist.linear.z, bodyVelocity.linear.z ) + param_throttle_mid_; //TODO: Add in a hover approximation
+			double Tx = goal_accel.accel.linear.x;
+			double Ty = goal_accel.accel.linear.y;
+			double Tz = goal_accel.accel.linear.z + param_throttle_mid_; //TODO: Add in a hover approximation
 
 			//Thrust Calculation
 			tf2::Vector3 gThrust(Tx, Ty, Tz);
 			tf2::Vector3 xyThrust(Tx, Ty, 0.0);
+			tf2::Quaternion goalThrustRotation(0.0, 0.0, 0.0, 1.0);
 
 			//If xy thrust vector length greater than 0.01
 			if( xyThrust.length() > MIN_DIST ) {
@@ -276,9 +270,9 @@ void Mavel::controller_cb( const ros::TimerEvent& ) {
 			}
 
 			//If thrust_abs > thr_max
-			if( gThrust.length() > param_throttle_max ) {
+			if( gThrust.length() > param_throttle_max_ ) {
 				//If thrust_z larger than thr_max, limit throttle, set xy to 0
-				if( gThrust.getZ() > param_throttle_max ) {
+				if( gThrust.getZ() > param_throttle_max_ ) {
 					gThrust.setX( 0.0 );
 					gThrust.setY( 0.0 );
 					gThrust.setZ( param_throttle_max_ );
@@ -294,16 +288,16 @@ void Mavel::controller_cb( const ros::TimerEvent& ) {
 			}
 
 			//Create body_x, body_y, body_z
-			tf::Vector3 body_x;
-			tf::Vector3 body_y;
-			tf::Vector3 body_z;
+			tf2::Vector3 body_x;
+			tf2::Vector3 body_y;
+			tf2::Vector3 body_z;
 
 			//thrust_abs > SIGMA
 			if( gThrust.length() > SIGMA) {
 				//Get the direction of the thrust vector (and rotate to the body frame)
 				body_z = gThrust.normalized();
 			} else {
-				//No thrust commanded, align with straight up
+				//No thrust commanded, salign with straight up
 				body_z.setZ( 1.0f );
 				ROS_INFO("No thrust command, keeping zero Z orientation!");
 			}
@@ -323,7 +317,7 @@ void Mavel::controller_cb( const ros::TimerEvent& ) {
 			//Check to make sure the thrust vector is in the Z axis, or on the XY plane
 			if (fabs(body_z.getZ()) > SIGMA) {
 				//Get a vector that aligns the Y axis with pi/2
-				tf::Vector3 yaw_r( sin( yaw_c ), cos( yaw_c ), 0.0f );
+				tf2::Vector3 yaw_r( sin( yaw_c ), cos( yaw_c ), 0.0f );
 				//Get the orthagonal vector to that (which will have correct pitch)
 				body_x = yaw_r.cross( body_z );
 
@@ -355,12 +349,13 @@ void Mavel::controller_cb( const ros::TimerEvent& ) {
 
 			//Get quaternion from R
 			R.getRotation( goalThrustRotation );
-			goalThrust = gThrust.length();
 
-			tf::quaternionTFToMsg( goalThrustRotation, outputAttitude.orientation );
-			outputAttitude.thrust = goalThrust;
-			outputAttitude.body_rate.z = goalYawRate;
+			goal_att.orientation.w = goalThrustRotation.getW();
+			goal_att.orientation.x = goalThrustRotation.getX();
+			goal_att.orientation.y = goalThrustRotation.getY();
+			goal_att.orientation.z = goalThrustRotation.getZ();
 
+			goal_att.thrust = gThrust.length();
 		} else {
 			//Prevent body z integrator wind-up
 			integrator_body_rate_z_ = 0.0f;
@@ -370,7 +365,7 @@ void Mavel::controller_cb( const ros::TimerEvent& ) {
 		if( do_control_pos ) {
 			goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
 		} else if( do_control_vel ) {
-			goal_att.body_rate.z = stream_setpoint_velocity_.data.accel.angular.z;
+			goal_att.body_rate.z = stream_setpoint_velocity_.data.twist.angular.z;
 			goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 		} else if ( do_control_accel ) {
 			integrator_body_rate_z_ += dt * stream_setpoint_acceleration_.data.accel.angular.z;
@@ -388,9 +383,9 @@ void Mavel::controller_cb( const ros::TimerEvent& ) {
 		controller_pos_x.reset( stream_reference_position_.data.pose.position.x );
 		controller_pos_y.reset( stream_reference_position_.data.pose.position.y );
 		controller_pos_z.reset( stream_reference_position_.data.pose.position.z );
-		controller_vel_x.reset( stream_reference_position_.data.twist.linear.x );
-		controller_vel_y.reset( stream_reference_position_.data.twist.linear.y );
-		controller_vel_z.reset( stream_reference_position_.data.twist.linear.z );
+		controller_vel_x.reset( stream_reference_velocity_.data.twist.linear.x );
+		controller_vel_y.reset( stream_reference_velocity_.data.twist.linear.y );
+		controller_vel_z.reset( stream_reference_velocity_.data.twist.linear.z );
 		integrator_body_rate_z_ = 0.0f;
 
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE | goal_att.IGNORE_ATTITUDE;
@@ -422,7 +417,7 @@ void Mavel::param_pid_init( mavel_params_pid* pid, std::string controller_name )
 }
 
 template<typename streamDataT>
-void Mavel::stream_init( mavel_data_stream<streamDataT>* stream, double min_rate, std::string topic ) {
+void Mavel::stream_init( mavel_data_stream<streamDataT>* stream, const double min_rate, const std::string topic ) {
 	stream->state = HEALTH_UNKNOWN;
 
 	stream->count = 0;
@@ -434,13 +429,13 @@ void Mavel::stream_init( mavel_data_stream<streamDataT>* stream, double min_rate
 }
 
 template<typename streamDataT>
-void Mavel::stream_update( mavel_data_stream<streamDataT>* stream, <streamDataT>* data ) {
+void Mavel::stream_update( mavel_data_stream<streamDataT>* stream, const streamDataT* data ) {
 	stream->data = *data;
 	stream->count++;
 }
 
 template<typename streamDataT>
-mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT>* stream, ros::Time time_now ) {
+mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT>* stream, const ros::Time time_now ) {
 	//If the latest data in the stream is older than the timeout
 	if( ( time_now - stream->data.header.stamp ) > stream->timeout ) {
 		//If the stream was previously OK, then send warning
@@ -453,13 +448,13 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT>* st
 		stream->count = 0;
 	} else {	//We have fresh data
 		//If we have established a stream, and it wasn't already OK
-		if( ( stream->count > stream->stream_count ) && ( stream->state != HEALTH_OK ) {
+		if( ( stream->count > stream->stream_count ) && ( stream->state != HEALTH_OK ) ) {
 			stream->state = HEALTH_OK;
 			ROS_INFO("Control connected on: %s", stream->stream_topic.c_str() );
 		}
 	}
 
-	return steam->state;
+	return stream->state;
 }
 
 /*
