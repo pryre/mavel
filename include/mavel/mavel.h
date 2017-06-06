@@ -88,16 +88,13 @@ class Mavel {
 		ros::Subscriber sub_setpoint_velocity_;
 		ros::Subscriber sub_setpoint_acceleration_;
 
-		ros::Timer timer_control_position_;
-		ros::Timer timer_control_velocity_;
-		ros::Timer timer_control_acceleration_;
+		ros::Timer timer_controlller_;
 
-		bool param_external_velocity_setpoint;
-		bool param_external_acceleration_setpoint;
-
-		double param_rate_control_position_;
-		double param_rate_control_velocity_;
-		double param_rate_control_acceleration_;
+		double param_rate_control_;
+		double param_tilt_max_;
+		double param_throttle_min_;
+		double param_throttle_mid_;
+		double param_throttle_max_;
 
 		//Rate in Hz
 		//Required stream count is derived as 2*rate
@@ -128,6 +125,8 @@ class Mavel {
 		pidController controller_vel_z;
 
 		double integrator_body_rate_z_;
+
+		std::string param_control_frame_id_;
 
 		std::string topic_input_position_reference_;
 		std::string topic_input_velocity_reference_;

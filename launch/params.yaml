@@ -1,16 +1,15 @@
 # Common configuration for the mavel velocity controller
 
-# Use External Setpoint
-external_setpoint:
-  velocity: false
-  acceleration: false
-
 # Control Rates
-# (must be higher than the derivative data stream rate)
-control_rate:
-  position: 20.0
-  velocity: 30.0
-  acceleration: 50.0
+control_rate: 50.0
+
+throttle:
+  min: 0.2
+  min: 0.5
+  min: 0.9
+
+# Maximum roll/pitch in radians
+tilt_max: 0.39
 
 # Data Stream
 stream:
@@ -64,7 +63,7 @@ pid:
     x:
       kp: 0.5
       ki: 0.0
-      kd: 0.02
+      kd: 0.0
       tau: 0.05
       min: -0.2
       max: 0.2
