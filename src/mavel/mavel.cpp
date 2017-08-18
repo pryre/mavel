@@ -97,7 +97,7 @@ Mavel::Mavel() :
 	sub_setpoint_velocity_ = nh_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_setpoint_, 100, &Mavel::setpoint_velocity_cb, this );
 	sub_setpoint_position_ = nh_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_setpoint_, 100, &Mavel::setpoint_position_cb, this );
 
-	/*
+	//Wait for streams before starting
 	bool wait_for_inputs = true;
 	ros::Rate check_rate( param_rate_control_ );
 	ROS_INFO("Mavel setup, waiting for control inputs...");
@@ -118,7 +118,6 @@ Mavel::Mavel() :
 		ros::spinOnce();
 		check_rate.sleep();
 	}
-	*/
 
 	//Timers for controllers
 	timer_controller_ = nh_.createTimer( ros::Duration( 1.0 / param_rate_control_ ), &Mavel::controller_cb, this );
