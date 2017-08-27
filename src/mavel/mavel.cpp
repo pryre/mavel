@@ -4,7 +4,6 @@
 #include <ros/ros.h>
 
 #include <tf2/transform_datatypes.h>
-#include <tf2_ros/transform_listener.h>
 
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Vector3.h>
@@ -28,7 +27,6 @@
 
 Mavel::Mavel() :
 	nh_( "~" ),
-	tfln_( tfbuffer_ ),
 	integrator_body_rate_z_( 0.0 ) {
 
 	nh_.param( "control_rate", param_rate_control_, 20.0 );

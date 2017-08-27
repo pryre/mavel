@@ -4,7 +4,6 @@
 #include <ros/ros.h>
 
 #include <tf2/transform_datatypes.h>
-#include <tf2_ros/transform_listener.h>
 
 #include <geometry_msgs/TransformStamped.h>
 #include <nav_msgs/Odometry.h>
@@ -74,9 +73,6 @@ struct mavel_params_pid {
 class Mavel {
 	private:
 		ros::NodeHandle nh_;
-
-		tf2_ros::Buffer tfbuffer_;
-		tf2_ros::TransformListener tfln_;
 
 		ros::Publisher pub_output_position_;
 		ros::Publisher pub_output_velocity_;
