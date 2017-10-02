@@ -2,7 +2,7 @@
 
 # Control
 control_rate: 50.0
-control_frame: "local_origin"
+control_frame: "map"
 
 throttle:
   min: 0.0
@@ -12,10 +12,14 @@ throttle:
 # Maximum roll/pitch in radians
 tilt_max: 0.39
 
+# Emergency Landing Velocity (must be negative!)
+failsafe_land_vel: -0.2
+
 # Data Stream
 stream:
   min_rate:
     reference:
+      state: 0.5
       odometry: 10.0
     setpoint:
       position: 5.0
@@ -24,6 +28,7 @@ stream:
   topic:
     reference:
       odometry: "reference/odometry"
+      state: "reference/state"
     setpoint:
       position: "setpoint/position"
       velocity: "setpoint/velocity"

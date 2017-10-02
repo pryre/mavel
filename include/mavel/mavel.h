@@ -10,6 +10,8 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/AccelStamped.h>
+#include <mavros_msgs/State.h>
+#include <mavros_msgs/AttitudeTarget.h>
 
 #include <string>
 
@@ -79,51 +81,57 @@ class Mavel {
 		ros::Publisher pub_output_acceleration_;
 		ros::Publisher pub_output_attitude_;
 
+		ros::Subscriber sub_reference_state_;
 		ros::Subscriber sub_reference_odometry_;
 		ros::Subscriber sub_setpoint_position_;
 		ros::Subscriber sub_setpoint_velocity_;
 		ros::Subscriber sub_setpoint_acceleration_;
 
 		ros::Timer timer_controller_;
+		bool control_started_;
+		bool control_fatal_;
 
 		double param_rate_control_;
 		double param_tilt_max_;
 		double param_throttle_min_;
 		double param_throttle_mid_;
 		double param_throttle_max_;
+		double param_land_vel_;
 
 		//Rate in Hz
 		//Required stream count is derived as 2*rate
 		double param_stream_min_rate_reference_odometry_;
+		double param_stream_min_rate_reference_state_;
 		double param_stream_min_rate_setpoint_position_;
 		double param_stream_min_rate_setpoint_velocity_;
 		double param_stream_min_rate_setpoint_acceleration_;
 
 		mavel_data_stream<nav_msgs::Odometry> stream_reference_odometry_;
+		mavel_data_stream<mavros_msgs::State> stream_reference_state_;
 		mavel_data_stream<geometry_msgs::PoseStamped> stream_setpoint_position_;
 		mavel_data_stream<geometry_msgs::TwistStamped> stream_setpoint_velocity_;
 		mavel_data_stream<geometry_msgs::AccelStamped> stream_setpoint_acceleration_;
 
-		mavel_params_pid param_pid_pos_x;
-		mavel_params_pid param_pid_pos_y;
-		mavel_params_pid param_pid_pos_z;
-		mavel_params_pid param_pid_vel_x;
-		mavel_params_pid param_pid_vel_y;
-		mavel_params_pid param_pid_vel_z;
+		mavel_params_pid param_pid_pos_x_;
+		mavel_params_pid param_pid_pos_y_;
+		mavel_params_pid param_pid_pos_z_;
+		mavel_params_pid param_pid_vel_x_;
+		mavel_params_pid param_pid_vel_y_;
+		mavel_params_pid param_pid_vel_z_;
 
-		pidController controller_pos_x;
-		pidController controller_pos_y;
-		pidController controller_pos_z;
-		pidController controller_vel_x;
-		pidController controller_vel_y;
-		pidController controller_vel_z;
+		pidController controller_pos_x_;
+		pidController controller_pos_y_;
+		pidController controller_pos_z_;
+		pidController controller_vel_x_;
+		pidController controller_vel_y_;
+		pidController controller_vel_z_;
 
 		double integrator_body_rate_z_;
 
 		std::string param_control_frame_id_;
 
 		std::string topic_input_odometry_reference_;
-
+		std::string topic_input_state_reference_;
 		std::string topic_input_position_setpoint_;
 		std::string topic_input_velocity_setpoint_;
 		std::string topic_input_acceleration_setpoint_;
@@ -139,12 +147,16 @@ class Mavel {
 		~Mavel( void );
 
 		void reference_odometry_cb( const nav_msgs::Odometry msg_in );
+		void reference_state_cb( const mavros_msgs::State msg_in );
+
 		void setpoint_position_cb( const geometry_msgs::PoseStamped msg_in );
 		void setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in );
 		void setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
 
 		//Handles the controller loop
 		void controller_cb( const ros::TimerEvent& timerCallback );
+		void do_control( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget* goal_att );
+		void do_failsafe( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget* goal_att );
 
 	private:
 		//Initializes the pid parameters for a controller
