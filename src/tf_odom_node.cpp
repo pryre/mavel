@@ -13,6 +13,8 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/Twist.h>
+#include <geometry_msgs/Vector3.h>
+#include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 
 #include <string>
@@ -38,6 +40,10 @@ class TFHelper {
 		geometry_msgs::TransformStamped prev_transform_;
 		tf2::Vector3 vel_l_filtered_;
 		tf2::Vector3 vel_a_filtered_;
+		
+		bool param_use_imu_;
+		ros::Subscriber imu_sub_;
+		geometry_msgs::Vector3 latest_imu_ang_vel_;
 
 		tf2_ros::Buffer tfbf_;
 		tf2_ros::TransformListener tfln_;
@@ -52,7 +58,8 @@ class TFHelper {
 			param_tf_lookup_rate_(50.0),
 			param_tf_timeout_duration_(2.0f / param_tf_lookup_rate_),
 			param_tf_averaging_interval_(0.1),
-			param_vel_filter_beta_(0.2) {
+			param_vel_filter_beta_(0.2),
+			param_use_imu_(false) {
 
 			//Get parameters, or if not defined, use the defaults
 			nh_.param( "frame_world", tf_frame_world_, tf_frame_world_ );
@@ -61,10 +68,15 @@ class TFHelper {
 			nh_.param( "lookup_rate", param_tf_lookup_rate_, param_tf_lookup_rate_ );
 			nh_.param( "velocity_interval", param_tf_averaging_interval_, param_tf_averaging_interval_ );
 			nh_.param( "velocity_filtering", param_vel_filter_beta_, param_vel_filter_beta_ );
+			nh_.param( "use_imu", param_use_imu_, param_use_imu_);
 
 			param_tf_timeout_duration_ = 2.0f / param_tf_lookup_rate_;
 			msg_odom_.header.frame_id = tf_frame_world_;
 			msg_odom_.child_frame_id = tf_frame_mav_;
+
+			if(param_use_imu_) {
+				imu_sub_ = nh_.subscribe<sensor_msgs::Imu>( "input/imu", 1, &TFHelper::imu_cb, this );
+			}
 
 			pub_odom_ = nh_.advertise<nav_msgs::Odometry>( topic_odom_, 100 );
 			timer_tf_ = nh_.createTimer( ros::Duration( 1.0f / param_tf_lookup_rate_ ), &TFHelper::tf_cb, this );
@@ -76,112 +88,14 @@ class TFHelper {
 			//This message won't actually send here, as the node will have already shut down
 			ROS_INFO("Shutting down...");
 		}
-		/*
-		void lookupTwist(const std::string& tracking_frame,
-						 const std::string& observation_frame,
-						 const std::string& reference_frame,
-						 const tf2::Vector3& reference_point,
-						 const std::string& reference_point_frame,
-						 const ros::Time& time,
-						 const ros::Duration& averaging_interval,
-						 geometry_msgs::Twist& twist) {
 
-			ros::Time latest_time, target_time;
-			tf2::CompactFrameID cfid_observation = tfbf_._lookupFrameNumber(observation_frame);
-			tf2::CompactFrameID cfid_tracking = tfbf_._lookupFrameNumber(tracking_frame);
-			tfbf_._getLatestCommonTime(cfid_observation, cfid_tracking, latest_time, NULL);
-
-			if (ros::Time() == time) {
-				target_time = latest_time;
-			} else {
-				target_time = time;
-			}
-
-			ros::Time end_time = std::min(target_time + (averaging_interval * 0.5) , latest_time);
-			ros::Time start_time = std::max(ros::Time().fromSec(0.00001) + averaging_interval, end_time) - averaging_interval;  // don't collide with zero
-			ros::Duration corrected_averaging_interval = end_time - start_time; //correct for the possiblity that start time was truncated above.
-
-			geometry_msgs::TransformStamped msg_start, msg_end;
-			tf2::Stamped<tf2::Transform> start, end;
-
-			msg_start = tfbf_.lookupTransform(observation_frame, tracking_frame, start_time);
-			msg_end = tfbf_.lookupTransform(observation_frame, tracking_frame, end_time);
-			tf2::fromMsg(msg_start, start);
-			tf2::fromMsg(msg_end, end);
-
-
-			tf2::Matrix3x3 temp = start.getBasis().inverse() * end.getBasis();
-			tf2::Quaternion quat_temp;
-			temp.getRotation(quat_temp);
-			tf2::Vector3 o = start.getBasis() * quat_temp.getAxis();
-			tf2Scalar ang = quat_temp.getAngle();
-
-			double delta_x = end.getOrigin().getX() - start.getOrigin().getX();
-			double delta_y = end.getOrigin().getY() - start.getOrigin().getY();
-			double delta_z = end.getOrigin().getZ() - start.getOrigin().getZ();
-
-
-			tf2::Vector3 twist_vel ((delta_x)/corrected_averaging_interval.toSec(),
-									(delta_y)/corrected_averaging_interval.toSec(),
-									(delta_z)/corrected_averaging_interval.toSec());
-			tf2::Vector3 twist_rot = o * (ang / corrected_averaging_interval.toSec());
-
-
-			// This is a twist w/ reference frame in observation_frame  and reference point is in the tracking_frame at the origin (at start_time)
-
-			//correct for the position of the reference frame
-			geometry_msgs::TransformStamped msg_inverse;
-			tf2::Stamped<tf2::Transform> inverse;
-			msg_inverse = tfbf_.lookupTransform(reference_frame, tracking_frame, target_time);
-			tf2::fromMsg(msg_inverse, inverse);
-			tf2::Vector3 out_rot = inverse.getBasis() * twist_rot;
-			tf2::Vector3 out_vel = inverse.getBasis()* twist_vel + inverse.getOrigin().cross(out_rot);
-
-			//Rereference the twist about a new reference point
-			geometry_msgs::PointStamped rp_orig;
-			geometry_msgs::PointStamped rp_desired;
-			rp_orig.header.frame_id = tracking_frame;
-			rp_orig.header.stamp = target_time;
-			rp_orig.point.x = 0.0;
-			rp_orig.point.y = 0.0;
-			rp_orig.point.z = 0.0;
-			rp_desired.header.frame_id = reference_point_frame;
-			rp_desired.header.stamp = target_time;
-			rp_desired.point.x = reference_point.x();
-			rp_desired.point.y = reference_point.y();
-			rp_desired.point.z = reference_point.z();
-
-			// Start by computing the original reference point in the reference frame:
-			tfbf_.transform(rp_orig, rp_orig, reference_frame);
-			// convert the requrested reference point into the right frame
-			tfbf_.transform(rp_desired, rp_desired, reference_frame);
-			// compute the delta
-			tf2::Vector3 delta = tf2::Vector3(rp_desired.point.x, rp_desired.point.y, rp_desired.point.z) - tf2::Vector3(rp_orig.point.x, rp_orig.point.y, rp_orig.point.z);
-			// Correct for the change in reference point
-			out_vel = out_vel + out_rot * delta;
-			// out_rot unchanged
-
-			twist.linear.x =  out_vel.x();
-			twist.linear.y =  out_vel.y();
-			twist.linear.z =  out_vel.z();
-			twist.angular.x =  out_rot.x();
-			twist.angular.y =  out_rot.y();
-			twist.angular.z =  out_rot.z();
+		void imu_cb( const sensor_msgs::Imu::ConstPtr& msg_in) {
+			latest_imu_ang_vel_ = msg_in->angular_velocity;
+		
 		}
-
-		void lookupTwist(const std::string& tracking_frame,
-						 const std::string& observation_frame,
-						 const ros::Time& time,
-						 const ros::Duration& averaging_interval,
-						 geometry_msgs::Twist& twist) {
-			// ref point is origin of tracking_frame, ref_frame = obs_frame
-			lookupTwist(tracking_frame, observation_frame, observation_frame, tf2::Vector3(0,0,0), tracking_frame, time, averaging_interval, twist);
-		}
-		*/
 
 		//TODO: v[k] = {o[k-1]}^(-1) * (p[k] - p[k-1]) / (t[k] - t[k-1]),
 		//https://answers.ros.org/question/234085/how-can-the-velocity-of-a-robot-be-found-if-we-have-vicon-coordinates-available/
-
 		void tf_cb( const ros::TimerEvent& timer) {
 
 			if( tfbf_.canTransform(tf_frame_world_, tf_frame_mav_, timer.current_real, ros::Duration(param_tf_timeout_duration_)) ) {
@@ -189,13 +103,6 @@ class TFHelper {
 					geometry_msgs::TransformStamped transform;
 
 					transform = tfbf_.lookupTransform(tf_frame_world_, tf_frame_mav_, timer.current_real);
-					/*
-					lookupTwist(tf_frame_mav_,
-								tf_frame_world_,
-								timer.current_real,
-								ros::Duration(param_tf_averaging_interval_),
-								vel);
-					*/
 
 					//Get the rotation from the world to body frame (for angular measurements
 					tf2::Quaternion tmp_q( transform.transform.rotation.x,
@@ -248,7 +155,12 @@ class TFHelper {
 																	 0.0 ) ) * tmp_q;
 
 					tf2::Vector3 vel_l_body(rot_l_vel.x(), rot_l_vel.y(), rot_l_vel.z());
+					
 					tf2::Vector3 vel_a_body( 0.0, 0.0, 0.0 );
+					
+					if(param_use_imu_) {
+						vel_a_body = tf2::Vector3( latest_imu_ang_vel_.x, latest_imu_ang_vel_.y, latest_imu_ang_vel_.z );
+					}
 
 					//XXX Filter:lpf_tf.setOrigin( lpf_tf.getOrigin() - ( lpf_pos_beta * ( lpf_tf.getOrigin() - lpf_raw.getOrigin() ) ) );
 					vel_l_filtered_ = vel_l_filtered_ - (param_vel_filter_beta_ * (vel_l_filtered_ - vel_l_body));
