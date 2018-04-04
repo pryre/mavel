@@ -14,7 +14,6 @@
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/Vector3.h>
-#include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 
 #include <string>
@@ -40,10 +39,6 @@ class TFHelper {
 		geometry_msgs::TransformStamped prev_transform_;
 		tf2::Vector3 vel_l_filtered_;
 		tf2::Vector3 vel_a_filtered_;
-		
-		bool param_use_imu_;
-		ros::Subscriber imu_sub_;
-		geometry_msgs::Vector3 latest_imu_ang_vel_;
 
 		tf2_ros::Buffer tfbf_;
 		tf2_ros::TransformListener tfln_;
@@ -58,8 +53,7 @@ class TFHelper {
 			param_tf_lookup_rate_(50.0),
 			param_tf_timeout_duration_(2.0f / param_tf_lookup_rate_),
 			param_tf_averaging_interval_(0.1),
-			param_vel_filter_beta_(0.2),
-			param_use_imu_(false) {
+			param_vel_filter_beta_(0.2) {
 
 			//Get parameters, or if not defined, use the defaults
 			nh_.param( "frame_world", tf_frame_world_, tf_frame_world_ );
@@ -68,15 +62,10 @@ class TFHelper {
 			nh_.param( "lookup_rate", param_tf_lookup_rate_, param_tf_lookup_rate_ );
 			nh_.param( "velocity_interval", param_tf_averaging_interval_, param_tf_averaging_interval_ );
 			nh_.param( "velocity_filtering", param_vel_filter_beta_, param_vel_filter_beta_ );
-			nh_.param( "use_imu", param_use_imu_, param_use_imu_);
 
 			param_tf_timeout_duration_ = 2.0f / param_tf_lookup_rate_;
 			msg_odom_.header.frame_id = tf_frame_world_;
 			msg_odom_.child_frame_id = tf_frame_mav_;
-
-			if(param_use_imu_) {
-				imu_sub_ = nh_.subscribe<sensor_msgs::Imu>( "input/imu", 1, &TFHelper::imu_cb, this );
-			}
 
 			pub_odom_ = nh_.advertise<nav_msgs::Odometry>( topic_odom_, 100 );
 			timer_tf_ = nh_.createTimer( ros::Duration( 1.0f / param_tf_lookup_rate_ ), &TFHelper::tf_cb, this );
@@ -87,11 +76,6 @@ class TFHelper {
 		~TFHelper() {
 			//This message won't actually send here, as the node will have already shut down
 			ROS_INFO("Shutting down...");
-		}
-
-		void imu_cb( const sensor_msgs::Imu::ConstPtr& msg_in) {
-			latest_imu_ang_vel_ = msg_in->angular_velocity;
-		
 		}
 
 		//TODO: v[k] = {o[k-1]}^(-1) * (p[k] - p[k-1]) / (t[k] - t[k-1]),
@@ -155,12 +139,8 @@ class TFHelper {
 																	 0.0 ) ) * tmp_q;
 
 					tf2::Vector3 vel_l_body(rot_l_vel.x(), rot_l_vel.y(), rot_l_vel.z());
-					
+
 					tf2::Vector3 vel_a_body( 0.0, 0.0, 0.0 );
-					
-					if(param_use_imu_) {
-						vel_a_body = tf2::Vector3( latest_imu_ang_vel_.x, latest_imu_ang_vel_.y, latest_imu_ang_vel_.z );
-					}
 
 					//XXX Filter:lpf_tf.setOrigin( lpf_tf.getOrigin() - ( lpf_pos_beta * ( lpf_tf.getOrigin() - lpf_raw.getOrigin() ) ) );
 					vel_l_filtered_ = vel_l_filtered_ - (param_vel_filter_beta_ * (vel_l_filtered_ - vel_l_body));
