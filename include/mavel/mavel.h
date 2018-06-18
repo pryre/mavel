@@ -1,5 +1,5 @@
 #pragma once
-#include <pidController/pidController.h>
+#include <pid_controller_lib/pidController.h>
 
 #include <ros/ros.h>
 
@@ -75,6 +75,7 @@ struct mavel_params_pid {
 class Mavel {
 	private:
 		ros::NodeHandle nh_;
+		ros::NodeHandle nhp_;
 
 		ros::Publisher pub_output_position_;
 		ros::Publisher pub_output_velocity_;
@@ -111,13 +112,6 @@ class Mavel {
 		mavel_data_stream<geometry_msgs::PoseStamped> stream_setpoint_position_;
 		mavel_data_stream<geometry_msgs::TwistStamped> stream_setpoint_velocity_;
 		mavel_data_stream<geometry_msgs::AccelStamped> stream_setpoint_acceleration_;
-
-		mavel_params_pid param_pid_pos_x_;
-		mavel_params_pid param_pid_pos_y_;
-		mavel_params_pid param_pid_pos_z_;
-		mavel_params_pid param_pid_vel_x_;
-		mavel_params_pid param_pid_vel_y_;
-		mavel_params_pid param_pid_vel_z_;
 
 		pidController controller_pos_x_;
 		pidController controller_pos_y_;

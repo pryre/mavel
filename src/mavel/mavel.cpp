@@ -1,5 +1,5 @@
 #include <mavel/mavel.h>
-#include <pidController/pidController.h>
+#include <pid_controller_lib/pidController.h>
 
 #include <ros/ros.h>
 
@@ -26,63 +26,48 @@
 #define MIN_DIST		0.01f
 
 Mavel::Mavel() :
-	nh_( "~" ),
+	nh_(),
+	nhp_( "~" ),
 	control_started_(false),
 	control_fatal_(false),
-	integrator_body_rate_z_( 0.0 ) {
+	integrator_body_rate_z_( 0.0 ),
+	controller_pos_x_(&nhp_, "control/pos/x"),
+	controller_pos_y_(&nhp_, "control/pos/y"),
+	controller_pos_z_(&nhp_, "control/pos/z"),
+	controller_vel_x_(&nhp_, "control/vel/x"),
+	controller_vel_y_(&nhp_, "control/vel/y"),
+	controller_vel_z_(&nhp_, "control/vel/z") {
 
-	nh_.param( "control_rate", param_rate_control_, 20.0 );
+	nhp_.param( "control_rate", param_rate_control_, 20.0 );
 
-	nh_.param( "tilt_max", param_tilt_max_, 0.39 );
+	nhp_.param( "tilt_max", param_tilt_max_, 0.39 );
 
-	nh_.param( "throttle/min", param_throttle_min_, 0.0 );
-	nh_.param( "throttle/mid", param_throttle_mid_, 0.5 );
-	nh_.param( "throttle/max", param_throttle_max_, 0.9 );
+	nhp_.param( "throttle/min", param_throttle_min_, 0.0 );
+	nhp_.param( "throttle/mid", param_throttle_mid_, 0.5 );
+	nhp_.param( "throttle/max", param_throttle_max_, 0.9 );
 
-	nh_.param( "failsafe_land_vel", param_land_vel_, -0.2 );
+	nhp_.param( "failsafe_land_vel", param_land_vel_, -0.2 );
 
-	nh_.param( "control_frame", param_control_frame_id_, std::string("world") );
-
-	//PID Controllers
-	param_pid_init( &param_pid_pos_x_, "pid/position/x" );
-	param_pid_init( &param_pid_pos_y_, "pid/position/y" );
-	param_pid_init( &param_pid_pos_z_, "pid/position/z" );
-	param_pid_init( &param_pid_vel_x_, "pid/velocity/x" );
-	param_pid_init( &param_pid_vel_y_, "pid/velocity/y" );
-	param_pid_init( &param_pid_vel_z_, "pid/velocity/z" );
-
-	controller_pos_x_.setGains( param_pid_pos_x_.kp, param_pid_pos_x_.ki, param_pid_pos_x_.kd, param_pid_pos_x_.tau );
-	controller_pos_x_.setOutputMinMax( param_pid_pos_x_.min, param_pid_pos_x_.max );
-	controller_pos_y_.setGains( param_pid_pos_y_.kp, param_pid_pos_y_.ki, param_pid_pos_y_.kd, param_pid_pos_y_.tau );
-	controller_pos_y_.setOutputMinMax( param_pid_pos_y_.min, param_pid_pos_y_.max );
-	controller_pos_z_.setGains( param_pid_pos_z_.kp, param_pid_pos_z_.ki, param_pid_pos_z_.kd, param_pid_pos_z_.tau );
-	controller_pos_z_.setOutputMinMax( param_pid_pos_z_.min, param_pid_pos_z_.max );
-
-	controller_vel_x_.setGains( param_pid_vel_x_.kp, param_pid_vel_x_.ki, param_pid_vel_x_.kd, param_pid_vel_x_.tau );
-	controller_vel_x_.setOutputMinMax( param_pid_vel_x_.min, param_pid_vel_x_.max );
-	controller_vel_y_.setGains( param_pid_vel_y_.kp, param_pid_vel_y_.ki, param_pid_vel_y_.kd, param_pid_vel_y_.tau );
-	controller_vel_y_.setOutputMinMax( param_pid_vel_y_.min, param_pid_vel_y_.max );
-	controller_vel_z_.setGains( param_pid_vel_z_.kp, param_pid_vel_z_.ki, param_pid_vel_z_.kd, param_pid_vel_z_.tau );
-	controller_vel_z_.setOutputMinMax( param_pid_vel_z_.min, param_pid_vel_z_.max );
+	nhp_.param( "control_frame", param_control_frame_id_, std::string("world") );
 
 	//Data streams
-	nh_.param( "stream/min_rate/reference/odometry", param_stream_min_rate_reference_odometry_, 25.0 );
-	nh_.param( "stream/min_rate/reference/state", param_stream_min_rate_reference_state_, 0.5 );
-	nh_.param( "stream/min_rate/setpoint/position", param_stream_min_rate_setpoint_position_, 5.0 );
-	nh_.param( "stream/min_rate/setpoint/velocity", param_stream_min_rate_setpoint_velocity_, 25.0 );
-	nh_.param( "stream/min_rate/setpoint/acceleration", param_stream_min_rate_setpoint_acceleration_, 50.0 );
+	nhp_.param( "stream/min_rate/reference/odometry", param_stream_min_rate_reference_odometry_, 25.0 );
+	nhp_.param( "stream/min_rate/reference/state", param_stream_min_rate_reference_state_, 0.5 );
+	nhp_.param( "stream/min_rate/setpoint/position", param_stream_min_rate_setpoint_position_, 5.0 );
+	nhp_.param( "stream/min_rate/setpoint/velocity", param_stream_min_rate_setpoint_velocity_, 25.0 );
+	nhp_.param( "stream/min_rate/setpoint/acceleration", param_stream_min_rate_setpoint_acceleration_, 50.0 );
 
-	nh_.param( "stream/topic/reference/odometry", topic_input_odometry_reference_, std::string("reference/odometry") );
-	nh_.param( "stream/topic/reference/state", topic_input_state_reference_, std::string("reference/state") );
+	nhp_.param( "stream/topic/reference/odometry", topic_input_odometry_reference_, std::string("reference/odometry") );
+	nhp_.param( "stream/topic/reference/state", topic_input_state_reference_, std::string("reference/state") );
 
-	nh_.param( "stream/topic/setpoint/position", topic_input_position_setpoint_, std::string("setpoint/pose") );
-	nh_.param( "stream/topic/setpoint/velocity", topic_input_velocity_setpoint_, std::string("setpoint/cmd_vel") );
-	nh_.param( "stream/topic/setpoint/acceleration", topic_input_acceleration_setpoint_, std::string("setpoint/accel") );
+	nhp_.param( "stream/topic/setpoint/position", topic_input_position_setpoint_, std::string("setpoint/pose") );
+	nhp_.param( "stream/topic/setpoint/velocity", topic_input_velocity_setpoint_, std::string("setpoint/cmd_vel") );
+	nhp_.param( "stream/topic/setpoint/acceleration", topic_input_acceleration_setpoint_, std::string("setpoint/accel") );
 
-	nh_.param( "stream/topic/feedback/position", topic_output_position_, std::string("control/pose") );
-	nh_.param( "stream/topic/feedback/velocity", topic_output_velocity_, std::string("control/cmd_vel") );
-	nh_.param( "stream/topic/feedback/acceleration", topic_output_acceleration_, std::string("control/accel") );
-	nh_.param( "stream/topic/feedback/attitude", topic_output_attitude_, std::string("control/attitude") );
+	nhp_.param( "stream/topic/feedback/position", topic_output_position_, std::string("control/pose") );
+	nhp_.param( "stream/topic/feedback/velocity", topic_output_velocity_, std::string("control/cmd_vel") );
+	nhp_.param( "stream/topic/feedback/acceleration", topic_output_acceleration_, std::string("control/accel") );
+	nhp_.param( "stream/topic/feedback/attitude", topic_output_attitude_, std::string("control/attitude") );
 
 	stream_init( &stream_reference_odometry_, param_stream_min_rate_reference_odometry_, topic_input_odometry_reference_ );
 	stream_init( &stream_reference_state_, param_stream_min_rate_reference_state_, topic_input_state_reference_ );
@@ -91,23 +76,23 @@ Mavel::Mavel() :
 	stream_init( &stream_setpoint_acceleration_, param_stream_min_rate_setpoint_acceleration_, topic_input_acceleration_setpoint_ );
 
 	//Publishers
-	pub_output_attitude_ = nh_.advertise<mavros_msgs::AttitudeTarget>( topic_output_attitude_, 100 );
-	pub_output_acceleration_ = nh_.advertise<geometry_msgs::AccelStamped>( topic_output_acceleration_, 100 );
-	pub_output_velocity_ = nh_.advertise<geometry_msgs::TwistStamped>( topic_output_velocity_, 100 );
-	pub_output_position_ = nh_.advertise<geometry_msgs::PoseStamped>( topic_output_position_, 100 );
+	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( topic_output_attitude_, 100 );
+	pub_output_acceleration_ = nhp_.advertise<geometry_msgs::AccelStamped>( topic_output_acceleration_, 100 );
+	pub_output_velocity_ = nhp_.advertise<geometry_msgs::TwistStamped>( topic_output_velocity_, 100 );
+	pub_output_position_ = nhp_.advertise<geometry_msgs::PoseStamped>( topic_output_position_, 100 );
 
 	//Subscribers
-	sub_reference_odometry_ = nh_.subscribe<nav_msgs::Odometry>( topic_input_odometry_reference_, 100, &Mavel::reference_odometry_cb, this );
-	sub_reference_state_ = nh_.subscribe<mavros_msgs::State>( topic_input_state_reference_, 100, &Mavel::reference_state_cb, this );
-	sub_setpoint_acceleration_ = nh_.subscribe<geometry_msgs::AccelStamped>( topic_input_acceleration_setpoint_, 100, &Mavel::setpoint_acceleration_cb, this );
-	sub_setpoint_velocity_ = nh_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_setpoint_, 100, &Mavel::setpoint_velocity_cb, this );
-	sub_setpoint_position_ = nh_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_setpoint_, 100, &Mavel::setpoint_position_cb, this );
+	sub_reference_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( topic_input_odometry_reference_, 100, &Mavel::reference_odometry_cb, this );
+	sub_reference_state_ = nhp_.subscribe<mavros_msgs::State>( topic_input_state_reference_, 100, &Mavel::reference_state_cb, this );
+	sub_setpoint_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( topic_input_acceleration_setpoint_, 100, &Mavel::setpoint_acceleration_cb, this );
+	sub_setpoint_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_setpoint_, 100, &Mavel::setpoint_velocity_cb, this );
+	sub_setpoint_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_setpoint_, 100, &Mavel::setpoint_position_cb, this );
 
 	//Wait for streams before starting
 	ROS_INFO("Mavel setup, waiting for control inputs...");
 
 	//Timers for controllers
-	timer_controller_ = nh_.createTimer( ros::Duration( 1.0 / param_rate_control_ ), &Mavel::controller_cb, this );
+	timer_controller_ = nhp_.createTimer( ros::Duration( 1.0 / param_rate_control_ ), &Mavel::controller_cb, this );
 }
 
 Mavel::~Mavel() {
@@ -162,15 +147,6 @@ void Mavel::setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in ) {
 
 void Mavel::setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in ) {
 	stream_update( &stream_setpoint_acceleration_, &msg_in );
-}
-
-void Mavel::param_pid_init( mavel_params_pid* pid, std::string controller_name ) {
-	nh_.param( controller_name + "/kp", pid->kp, 0.0);
-	nh_.param( controller_name + "/ki", pid->ki, 0.0);
-	nh_.param( controller_name + "/kd", pid->kd, 0.0);
-	nh_.param( controller_name + "/tau", pid->tau, 0.0);
-	nh_.param( controller_name + "/min", pid->min, -1.0);
-	nh_.param( controller_name + "/max", pid->max, 1.0);
 }
 
 template<typename streamDataT>
