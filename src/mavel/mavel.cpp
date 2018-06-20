@@ -58,42 +58,30 @@ Mavel::Mavel() :
 	nhp_.param( "control_frame", param_control_frame_id_, std::string("world") );
 
 	//Data streams
-	nhp_.param( "stream/min_rate/reference/odometry", param_stream_min_rate_reference_odometry_, 25.0 );
-	nhp_.param( "stream/min_rate/reference/state", param_stream_min_rate_reference_state_, 0.5 );
-	nhp_.param( "stream/min_rate/setpoint/position", param_stream_min_rate_setpoint_position_, 5.0 );
-	nhp_.param( "stream/min_rate/setpoint/velocity", param_stream_min_rate_setpoint_velocity_, 25.0 );
-	nhp_.param( "stream/min_rate/setpoint/acceleration", param_stream_min_rate_setpoint_acceleration_, 50.0 );
+	nhp_.param( "min_rate/reference/odometry", param_stream_min_rate_reference_odometry_, 25.0 );
+	nhp_.param( "min_rate/reference/state", param_stream_min_rate_reference_state_, 0.5 );
+	nhp_.param( "min_rate/setpoint/position", param_stream_min_rate_setpoint_position_, 5.0 );
+	nhp_.param( "min_rate/setpoint/velocity", param_stream_min_rate_setpoint_velocity_, 25.0 );
+	nhp_.param( "min_rate/setpoint/acceleration", param_stream_min_rate_setpoint_acceleration_, 50.0 );
 
-	nhp_.param( "stream/topic/reference/odometry", topic_input_odometry_reference_, std::string("reference/odometry") );
-	nhp_.param( "stream/topic/reference/state", topic_input_state_reference_, std::string("reference/state") );
-
-	nhp_.param( "stream/topic/setpoint/position", topic_input_position_setpoint_, std::string("setpoint/pose") );
-	nhp_.param( "stream/topic/setpoint/velocity", topic_input_velocity_setpoint_, std::string("setpoint/cmd_vel") );
-	nhp_.param( "stream/topic/setpoint/acceleration", topic_input_acceleration_setpoint_, std::string("setpoint/accel") );
-
-	nhp_.param( "stream/topic/feedback/position", topic_output_position_, std::string("control/pose") );
-	nhp_.param( "stream/topic/feedback/velocity", topic_output_velocity_, std::string("control/cmd_vel") );
-	nhp_.param( "stream/topic/feedback/acceleration", topic_output_acceleration_, std::string("control/accel") );
-	nhp_.param( "stream/topic/feedback/attitude", topic_output_attitude_, std::string("control/attitude") );
-
-	stream_init( &stream_reference_odometry_, param_stream_min_rate_reference_odometry_, topic_input_odometry_reference_ );
-	stream_init( &stream_reference_state_, param_stream_min_rate_reference_state_, topic_input_state_reference_ );
-	stream_init( &stream_setpoint_position_, param_stream_min_rate_setpoint_position_, topic_input_position_setpoint_ );
-	stream_init( &stream_setpoint_velocity_, param_stream_min_rate_setpoint_velocity_, topic_input_velocity_setpoint_ );
-	stream_init( &stream_setpoint_acceleration_, param_stream_min_rate_setpoint_acceleration_, topic_input_acceleration_setpoint_ );
+	stream_init( &stream_reference_odometry_, param_stream_min_rate_reference_odometry_, "reference/odometry" );
+	stream_init( &stream_reference_state_, param_stream_min_rate_reference_state_, "reference/state" );
+	stream_init( &stream_setpoint_position_, param_stream_min_rate_setpoint_position_, "reference/pose" );
+	stream_init( &stream_setpoint_velocity_, param_stream_min_rate_setpoint_velocity_, "reference/twist" );
+	stream_init( &stream_setpoint_acceleration_, param_stream_min_rate_setpoint_acceleration_, "reference/accel" );
 
 	//Publishers
-	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( topic_output_attitude_, 100 );
-	pub_output_acceleration_ = nhp_.advertise<geometry_msgs::AccelStamped>( topic_output_acceleration_, 100 );
-	pub_output_velocity_ = nhp_.advertise<geometry_msgs::TwistStamped>( topic_output_velocity_, 100 );
-	pub_output_position_ = nhp_.advertise<geometry_msgs::PoseStamped>( topic_output_position_, 100 );
+	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( "attitude", 100 );
+	pub_output_acceleration_ = nhp_.advertise<geometry_msgs::AccelStamped>( "feedback/accel", 100 );
+	pub_output_velocity_ = nhp_.advertise<geometry_msgs::TwistStamped>( "feedback/twist", 100 );
+	pub_output_position_ = nhp_.advertise<geometry_msgs::PoseStamped>( "feedback/pose", 100 );
 
 	//Subscribers
-	sub_reference_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( topic_input_odometry_reference_, 100, &Mavel::reference_odometry_cb, this );
-	sub_reference_state_ = nhp_.subscribe<mavros_msgs::State>( topic_input_state_reference_, 100, &Mavel::reference_state_cb, this );
-	sub_setpoint_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( topic_input_acceleration_setpoint_, 100, &Mavel::setpoint_acceleration_cb, this );
-	sub_setpoint_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_setpoint_, 100, &Mavel::setpoint_velocity_cb, this );
-	sub_setpoint_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_setpoint_, 100, &Mavel::setpoint_position_cb, this );
+	sub_reference_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( "reference/odometry", 100, &Mavel::reference_odometry_cb, this );
+	sub_reference_state_ = nhp_.subscribe<mavros_msgs::State>( "reference/state", 100, &Mavel::reference_state_cb, this );
+	sub_setpoint_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( "reference/accel", 100, &Mavel::setpoint_acceleration_cb, this );
+	sub_setpoint_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "reference/twist", 100, &Mavel::setpoint_velocity_cb, this );
+	sub_setpoint_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/pose", 100, &Mavel::setpoint_position_cb, this );
 
 	//ref_path_.set_latest( Eigen::Vector3d(param_home_x_, param_home_y_, param_home_z_), Eigen::Quaterniond::Identity() );
 

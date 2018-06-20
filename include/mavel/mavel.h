@@ -131,17 +131,6 @@ class Mavel {
 
 		std::string param_control_frame_id_;
 
-		std::string topic_input_odometry_reference_;
-		std::string topic_input_state_reference_;
-		std::string topic_input_position_setpoint_;
-		std::string topic_input_velocity_setpoint_;
-		std::string topic_input_acceleration_setpoint_;
-
-		std::string topic_output_position_;
-		std::string topic_output_velocity_;
-		std::string topic_output_acceleration_;
-		std::string topic_output_attitude_;
-
 	public:
 		Mavel( void );
 

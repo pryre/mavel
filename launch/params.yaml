@@ -15,29 +15,15 @@ tilt_max: 0.39
 # Emergency Landing Velocity (must be negative!)
 failsafe_land_vel: -0.2
 
-# Data Stream
-stream:
-  min_rate:
-    reference:
-      state: 0.5
-      odometry: 10.0
-    setpoint:
-      position: 5.0
-      velocity: 10.0
-      acceleration: 20.0
-  topic:
-    reference:
-      odometry: "reference/odometry"
-      state: "reference/state"
-    setpoint:
-      position: "setpoint/position"
-      velocity: "setpoint/velocity"
-      acceleration: "setpoint/acceleration"
-    feedback:
-      position: "goal/position"
-      velocity: "goal/velocity"
-      acceleration: "goal/acceleration"
-      attitude: "goal/attitude"
+# Data Stream Rates
+min_rate:
+  reference:
+    state: 0.5
+    odometry: 10.0
+  setpoint:
+    position: 5.0
+    velocity: 10.0
+    acceleration: 20.0
 
 # PID Controllers
 control:
