@@ -1,5 +1,4 @@
 #include <mavel/mavel.h>
-#include <pid_controller_lib/pidController.h>
 
 #include <ros/ros.h>
 
@@ -19,6 +18,9 @@
 #include <geometry_msgs/Point.h>
 #include <mavros_msgs/AttitudeTarget.h>
 
+#include <eigen3/Eigen/Dense>
+#include <pid_controller_lib/pidController.h>
+
 #include <string>
 #include <math.h>
 
@@ -31,6 +33,7 @@ Mavel::Mavel() :
 	control_started_(false),
 	control_fatal_(false),
 	integrator_body_rate_z_( 0.0 ),
+	ref_path_(&nhp_),
 	controller_pos_x_(&nhp_, "control/pos/x"),
 	controller_pos_y_(&nhp_, "control/pos/y"),
 	controller_pos_z_(&nhp_, "control/pos/z"),
@@ -47,6 +50,10 @@ Mavel::Mavel() :
 	nhp_.param( "throttle/max", param_throttle_max_, 0.9 );
 
 	nhp_.param( "failsafe_land_vel", param_land_vel_, -0.2 );
+
+	nhp_.param( "home/x", param_land_vel_, -0.2 );
+	nhp_.param( "home/y", param_land_vel_, -0.2 );
+	nhp_.param( "home/z", param_land_vel_, -0.2 );
 
 	nhp_.param( "control_frame", param_control_frame_id_, std::string("world") );
 
@@ -87,6 +94,8 @@ Mavel::Mavel() :
 	sub_setpoint_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( topic_input_acceleration_setpoint_, 100, &Mavel::setpoint_acceleration_cb, this );
 	sub_setpoint_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( topic_input_velocity_setpoint_, 100, &Mavel::setpoint_velocity_cb, this );
 	sub_setpoint_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( topic_input_position_setpoint_, 100, &Mavel::setpoint_position_cb, this );
+
+	//ref_path_.set_latest( Eigen::Vector3d(param_home_x_, param_home_y_, param_home_z_), Eigen::Quaterniond::Identity() );
 
 	//Wait for streams before starting
 	ROS_INFO("Mavel setup, waiting for control inputs...");
@@ -188,16 +197,18 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT>* st
 	return stream->state;
 }
 
-void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
-	bool stream_ref_odom_ok = stream_check( &stream_reference_odometry_, timerCallback.current_real ) == HEALTH_OK;
-	bool stream_ref_state_ok = stream_check( &stream_reference_state_, timerCallback.current_real ) == HEALTH_OK;
-	bool stream_sp_pos_ok = stream_check( &stream_setpoint_position_, timerCallback.current_real ) == HEALTH_OK;
-	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_, timerCallback.current_real ) == HEALTH_OK;
-	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_, timerCallback.current_real ) == HEALTH_OK;
+void Mavel::controller_cb( const ros::TimerEvent& te ) {
+	bool stream_ref_odom_ok = stream_check( &stream_reference_odometry_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_state_ok = stream_check( &stream_reference_state_, te.current_real ) == HEALTH_OK;
+	bool stream_sp_pos_ok = stream_check( &stream_setpoint_position_, te.current_real ) == HEALTH_OK;
+	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_, te.current_real ) == HEALTH_OK;
+	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_, te.current_real ) == HEALTH_OK;
+	bool stream_sp_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
 
 	bool setpoints_ok = ( stream_sp_accel_ok ) ||
 						( stream_sp_vel_ok && stream_ref_odom_ok ) ||
-						( stream_sp_pos_ok && stream_ref_odom_ok );
+						( stream_sp_pos_ok && stream_ref_odom_ok ) ||
+						( stream_sp_path_ok && stream_ref_odom_ok );
 
 	bool reference_ok = stream_ref_odom_ok && stream_ref_state_ok;
 
@@ -217,28 +228,28 @@ void Mavel::controller_cb( const ros::TimerEvent& timerCallback ) {
 				}
 			}
 
-			do_failsafe( timerCallback, &msg_out );
+			do_failsafe( te, msg_out );
 		} else {
 			if( arm_ok && reference_ok ) {
-				do_control( timerCallback, &msg_out );
+				do_control( te, msg_out );
 			} else {
 				control_fatal_ = true;
 			}
 		}
 	} else {
 		ROS_ERROR_THROTTLE( 2.0, "[PANIC] Reference or arming error! Failsafe enabled!");
-		do_failsafe( timerCallback, &msg_out );
+		do_failsafe( te, msg_out );
 	}
-
 
 	//Add in headers for attitude taget
 	msg_out.header.frame_id = param_control_frame_id_;
-	msg_out.header.stamp = timerCallback.current_real;
+	msg_out.header.stamp = te.current_real;
 
 	pub_output_attitude_.publish( msg_out );
 }
 
-void Mavel::do_control( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget* goal_att ) {
+void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &goal_att ) {
+	bool do_control_path = false;
 	bool do_control_pos = false;
 	bool do_control_vel = false;
 	bool do_control_accel = false;
@@ -250,11 +261,12 @@ void Mavel::do_control( const ros::TimerEvent& timerCallback, mavros_msgs::Attit
 	tf2::Transform ref_tf;
 	tf2::Vector3 ref_vel;
 
-	double dt = (timerCallback.current_real - timerCallback.last_real).toSec();
+	double dt = (te.current_real - te.last_real).toSec();
 
-	bool stream_sp_pos_ok = stream_check( &stream_setpoint_position_, timerCallback.current_real ) == HEALTH_OK;
-	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_, timerCallback.current_real ) == HEALTH_OK;
-	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_, timerCallback.current_real ) == HEALTH_OK;
+	bool stream_sp_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
+	bool stream_sp_pos_ok = stream_check( &stream_setpoint_position_, te.current_real ) == HEALTH_OK;
+	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_, te.current_real ) == HEALTH_OK;
+	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_, te.current_real ) == HEALTH_OK;
 
 	if( stream_sp_accel_ok ) {
 		goal_accel = stream_setpoint_acceleration_.data;
@@ -264,15 +276,21 @@ void Mavel::do_control( const ros::TimerEvent& timerCallback, mavros_msgs::Attit
 
 		do_control_vel = true;
 		do_control_accel = true;
-	} else if ( stream_sp_pos_ok ){
+	} else if ( stream_sp_pos_ok ) {
 		goal_pos = stream_setpoint_position_.data;
 
 		do_control_pos = true;
 		do_control_vel = true;
 		do_control_accel = true;
+	} else if ( stream_sp_path_ok ) {
+		//XXX: Set the goal inputs later on
+
+		do_control_path = true;
+		do_control_vel = true;
+		do_control_accel = true;
 	} else {
 		goal_vel.header.frame_id = param_control_frame_id_;
-		goal_vel.header.stamp = timerCallback.current_real;
+		goal_vel.header.stamp = te.current_real;
 		goal_vel.twist.linear.z = param_land_vel_;
 
 		do_control_vel = true;
@@ -300,14 +318,27 @@ void Mavel::do_control( const ros::TimerEvent& timerCallback, mavros_msgs::Attit
 
 	ref_vel = tf2::Vector3( rot_vel.getX(), rot_vel.getY(), rot_vel.getZ() );
 
-	//Position Control
-	if( do_control_pos ) {
+	//Position/Path Control
+	if( do_control_pos || do_control_path ) {
 		goal_vel.header.frame_id = param_control_frame_id_;
-		goal_vel.header.stamp = timerCallback.current_real;
+		goal_vel.header.stamp = te.current_real;
 
-		goal_vel.twist.linear.x = controller_pos_x_.step( dt, goal_pos.pose.position.x, ref_tf.getOrigin().getX(), ref_vel.getX() );
-		goal_vel.twist.linear.y = controller_pos_y_.step( dt, goal_pos.pose.position.y, ref_tf.getOrigin().getY(), ref_vel.getY() );
-		goal_vel.twist.linear.z = controller_pos_z_.step( dt, goal_pos.pose.position.z, ref_tf.getOrigin().getZ(), ref_vel.getZ() );
+		geometry_msgs::Vector3 l_vel;
+
+		if(do_control_path) {
+			goal_pos.header.frame_id = param_control_frame_id_;
+			goal_pos.header.stamp = te.current_real;
+			ref_path_.get_ref_state(goal_pos.pose, l_vel, te.current_real);
+		} else {
+			//Just do the normal position control (set the additional velocity ref to 0)
+			l_vel.x = 0.0;
+			l_vel.y = 0.0;
+			l_vel.z = 0.0;
+		}
+
+		goal_vel.twist.linear.x = l_vel.x + controller_pos_x_.step( dt, goal_pos.pose.position.x, ref_tf.getOrigin().getX(), ref_vel.getX() );
+		goal_vel.twist.linear.y = l_vel.y + controller_pos_y_.step( dt, goal_pos.pose.position.y, ref_tf.getOrigin().getY(), ref_vel.getY() );
+		goal_vel.twist.linear.z = l_vel.z + controller_pos_z_.step( dt, goal_pos.pose.position.z, ref_tf.getOrigin().getZ(), ref_vel.getZ() );
 	} else {
 		//Prevent PID wind-up
 		controller_pos_x_.reset( ref_tf.getOrigin().getX() );
@@ -318,7 +349,7 @@ void Mavel::do_control( const ros::TimerEvent& timerCallback, mavros_msgs::Attit
 	//Velocity Controller
 	if( do_control_vel ) {
 		goal_accel.header.frame_id = stream_setpoint_velocity_.data.header.frame_id;
-		goal_accel.header.stamp = timerCallback.current_real;
+		goal_accel.header.stamp = te.current_real;
 
 		goal_accel.accel.linear.x = controller_vel_x_.step( dt, goal_vel.twist.linear.x, ref_vel.getX() );
 		goal_accel.accel.linear.y = controller_vel_y_.step( dt, goal_vel.twist.linear.y, ref_vel.getY() );
@@ -437,32 +468,32 @@ void Mavel::do_control( const ros::TimerEvent& timerCallback, mavros_msgs::Attit
 		//Get quaternion from R
 		R.getRotation( goalThrustRotation );
 
-		goal_att->orientation.w = goalThrustRotation.getW();
-		goal_att->orientation.x = goalThrustRotation.getX();
-		goal_att->orientation.y = goalThrustRotation.getY();
-		goal_att->orientation.z = goalThrustRotation.getZ();
+		goal_att.orientation.w = goalThrustRotation.getW();
+		goal_att.orientation.x = goalThrustRotation.getX();
+		goal_att.orientation.y = goalThrustRotation.getY();
+		goal_att.orientation.z = goalThrustRotation.getZ();
 
-		goal_att->thrust = gThrust.length();
+		goal_att.thrust = gThrust.length();
 	} else {
 		//Prevent body z integrator wind-up
 		integrator_body_rate_z_ = 0.0;
 	}
 
 	//Do orientation control
-	if( do_control_pos ) {
-		goal_att->type_mask |= goal_att->IGNORE_ROLL_RATE | goal_att->IGNORE_PITCH_RATE | goal_att->IGNORE_YAW_RATE;
+	if( do_control_pos || do_control_path  ) {
+		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
 	} else if( do_control_vel ) {
-		goal_att->body_rate.z = stream_setpoint_velocity_.data.twist.angular.z;
-		goal_att->type_mask |= goal_att->IGNORE_ROLL_RATE | goal_att->IGNORE_PITCH_RATE;
+		goal_att.body_rate.z = stream_setpoint_velocity_.data.twist.angular.z;
+		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 	} else if ( do_control_accel ) {
 		integrator_body_rate_z_ += dt * stream_setpoint_acceleration_.data.accel.angular.z;
-		goal_att->body_rate.z = integrator_body_rate_z_;
-		goal_att->type_mask |= goal_att->IGNORE_ROLL_RATE | goal_att->IGNORE_PITCH_RATE;
+		goal_att.body_rate.z = integrator_body_rate_z_;
+		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 	}
 
 	//Minimum throttle override
-	if( goal_att->thrust < param_throttle_min_ )
-		goal_att->thrust = param_throttle_min_;
+	if( goal_att.thrust < param_throttle_min_ )
+		goal_att.thrust = param_throttle_min_;
 
 	//Handle the control feedback
 	if( do_control_accel )
@@ -471,11 +502,11 @@ void Mavel::do_control( const ros::TimerEvent& timerCallback, mavros_msgs::Attit
 	if( do_control_vel )
 		pub_output_velocity_.publish( goal_vel );
 
-	if( do_control_pos )
+	if( do_control_pos || do_control_path )
 		pub_output_position_.publish( goal_pos );
 }
 
-void Mavel::do_failsafe( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget* goal_att ) {
+void Mavel::do_failsafe( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &goal_att ) {
 	//Prevent PID wind-up
 	controller_pos_x_.reset( 0.0 );
 	controller_pos_y_.reset( 0.0 );
@@ -485,14 +516,14 @@ void Mavel::do_failsafe( const ros::TimerEvent& timerCallback, mavros_msgs::Atti
 	controller_vel_z_.reset( 0.0 );
 	integrator_body_rate_z_ = 0.0;
 
-	goal_att->orientation.w = 1.0;
-	goal_att->orientation.x = 0.0;
-	goal_att->orientation.y = 0.0;
-	goal_att->orientation.z = 0.0;
-	goal_att->body_rate.x = 0.0;
-	goal_att->body_rate.y = 0.0;
-	goal_att->body_rate.z = 0.0;
-	goal_att->type_mask |= goal_att->IGNORE_ROLL_RATE | goal_att->IGNORE_PITCH_RATE | goal_att->IGNORE_YAW_RATE | goal_att->IGNORE_ATTITUDE;
-	goal_att->thrust = 0.0;
+	goal_att.orientation.w = 1.0;
+	goal_att.orientation.x = 0.0;
+	goal_att.orientation.y = 0.0;
+	goal_att.orientation.z = 0.0;
+	goal_att.body_rate.x = 0.0;
+	goal_att.body_rate.y = 0.0;
+	goal_att.body_rate.z = 0.0;
+	goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE | goal_att.IGNORE_ATTITUDE;
+	goal_att.thrust = 0.0;
 }
 

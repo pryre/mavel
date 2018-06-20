@@ -6,6 +6,7 @@ project(mavel)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   pid_controller_lib
+  contrail
   geometry_msgs
   sensor_msgs
   roscpp
@@ -18,6 +19,7 @@ add_definitions(-std=c++11)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
+find_package(Eigen3 REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -110,6 +112,7 @@ catkin_package(
 #  LIBRARIES mavel
 #  CATKIN_DEPENDS geometry_msgs roscpp tf
 #  DEPENDS system_lib
+  DEPENDS Eigen3
 )
 
 ###########
@@ -122,6 +125,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${Eigen3_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library

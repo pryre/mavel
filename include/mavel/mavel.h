@@ -1,5 +1,4 @@
 #pragma once
-#include <pid_controller_lib/pidController.h>
 
 #include <ros/ros.h>
 
@@ -12,6 +11,10 @@
 #include <geometry_msgs/AccelStamped.h>
 #include <mavros_msgs/State.h>
 #include <mavros_msgs/AttitudeTarget.h>
+
+#include <eigen3/Eigen/Dense>
+#include <contrail/path_extract.h>
+#include <pid_controller_lib/pidController.h>
 
 #include <string>
 
@@ -98,6 +101,9 @@ class Mavel {
 		double param_throttle_mid_;
 		double param_throttle_max_;
 		double param_land_vel_;
+		double param_home_x_;
+		double param_home_y_;
+		double param_home_z_;
 
 		//Rate in Hz
 		//Required stream count is derived as 2*rate
@@ -113,6 +119,7 @@ class Mavel {
 		mavel_data_stream<geometry_msgs::TwistStamped> stream_setpoint_velocity_;
 		mavel_data_stream<geometry_msgs::AccelStamped> stream_setpoint_acceleration_;
 
+		PathExtract ref_path_;
 		pidController controller_pos_x_;
 		pidController controller_pos_y_;
 		pidController controller_pos_z_;
@@ -149,8 +156,8 @@ class Mavel {
 
 		//Handles the controller loop
 		void controller_cb( const ros::TimerEvent& timerCallback );
-		void do_control( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget* goal_att );
-		void do_failsafe( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget* goal_att );
+		void do_control( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget &goal_att );
+		void do_failsafe( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget &goal_att );
 
 	private:
 		//Initializes the pid parameters for a controller
