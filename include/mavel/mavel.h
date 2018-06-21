@@ -155,14 +155,14 @@ class Mavel {
 
 		//Initializes the stream parameters
 		template<typename streamDataT>
-		void stream_init( mavel_data_stream<streamDataT>* stream, const double min_rate, const std::string topic );
+		mavel_data_stream<streamDataT> stream_init( const double min_rate, const std::string topic );
 
 		//Updates the stream information that new data has been recieved
 		//New data should have already been added into the stream
 		template<typename streamDataT>
-		void stream_update( mavel_data_stream<streamDataT>* stream, const streamDataT* data );
+		void stream_update( mavel_data_stream<streamDataT> &stream, const streamDataT* data );
 
 		//Checks the stream for a timeout
 		template<typename streamDataT>
-		mavel_data_stream_states stream_check( mavel_data_stream<streamDataT>* stream, const ros::Time time_now );
+		mavel_data_stream_states stream_check( mavel_data_stream<streamDataT> &stream );
 };

@@ -51,51 +51,44 @@ Mavel::Mavel() :
 
 	nhp_.param( "failsafe_land_vel", param_land_vel_, -0.2 );
 
-	nhp_.param( "home/x", param_land_vel_, -0.2 );
-	nhp_.param( "home/y", param_land_vel_, -0.2 );
-	nhp_.param( "home/z", param_land_vel_, -0.2 );
-
 	nhp_.param( "control_frame", param_control_frame_id_, std::string("world") );
 
 	//Data streams
 	nhp_.param( "min_rate/reference/odometry", param_stream_min_rate_reference_odometry_, 25.0 );
-	nhp_.param( "min_rate/reference/state", param_stream_min_rate_reference_state_, 0.5 );
+	nhp_.param( "min_rate/reference/state", param_stream_min_rate_reference_state_, 0.2 );
 	nhp_.param( "min_rate/setpoint/position", param_stream_min_rate_setpoint_position_, 5.0 );
 	nhp_.param( "min_rate/setpoint/velocity", param_stream_min_rate_setpoint_velocity_, 25.0 );
 	nhp_.param( "min_rate/setpoint/acceleration", param_stream_min_rate_setpoint_acceleration_, 50.0 );
 
-	stream_init( &stream_reference_odometry_, param_stream_min_rate_reference_odometry_, "reference/odometry" );
-	stream_init( &stream_reference_state_, param_stream_min_rate_reference_state_, "reference/state" );
-	stream_init( &stream_setpoint_position_, param_stream_min_rate_setpoint_position_, "reference/pose" );
-	stream_init( &stream_setpoint_velocity_, param_stream_min_rate_setpoint_velocity_, "reference/twist" );
-	stream_init( &stream_setpoint_acceleration_, param_stream_min_rate_setpoint_acceleration_, "reference/accel" );
+	stream_reference_odometry_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_reference_odometry_, "state/odometry" );
+	stream_reference_state_ = stream_init<mavros_msgs::State>( param_stream_min_rate_reference_state_, "state/mav_state" );
+	stream_setpoint_position_ = stream_init<geometry_msgs::PoseStamped>( param_stream_min_rate_setpoint_position_, "reference/pose" );
+	stream_setpoint_velocity_ = stream_init<geometry_msgs::TwistStamped>( param_stream_min_rate_setpoint_velocity_, "reference/twist" );
+	stream_setpoint_acceleration_ = stream_init<geometry_msgs::AccelStamped>( param_stream_min_rate_setpoint_acceleration_, "reference/accel" );
 
 	//Publishers
-	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( "attitude", 100 );
+	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( "command/attitude", 100 );
 	pub_output_acceleration_ = nhp_.advertise<geometry_msgs::AccelStamped>( "feedback/accel", 100 );
 	pub_output_velocity_ = nhp_.advertise<geometry_msgs::TwistStamped>( "feedback/twist", 100 );
 	pub_output_position_ = nhp_.advertise<geometry_msgs::PoseStamped>( "feedback/pose", 100 );
 
 	//Subscribers
-	sub_reference_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( "reference/odometry", 100, &Mavel::reference_odometry_cb, this );
-	sub_reference_state_ = nhp_.subscribe<mavros_msgs::State>( "reference/state", 100, &Mavel::reference_state_cb, this );
-	sub_setpoint_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( "reference/accel", 100, &Mavel::setpoint_acceleration_cb, this );
-	sub_setpoint_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "reference/twist", 100, &Mavel::setpoint_velocity_cb, this );
-	sub_setpoint_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/pose", 100, &Mavel::setpoint_position_cb, this );
+	sub_reference_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( "state/odometry", 10, &Mavel::reference_odometry_cb, this );
+	sub_reference_state_ = nhp_.subscribe<mavros_msgs::State>( "state/mav_state", 10, &Mavel::reference_state_cb, this );
+	sub_setpoint_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( "reference/accel", 10, &Mavel::setpoint_acceleration_cb, this );
+	sub_setpoint_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "reference/twist", 10, &Mavel::setpoint_velocity_cb, this );
+	sub_setpoint_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/pose", 10, &Mavel::setpoint_position_cb, this );
 
 	//ref_path_.set_latest( Eigen::Vector3d(param_home_x_, param_home_y_, param_home_z_), Eigen::Quaterniond::Identity() );
 
 	//Wait for streams before starting
-	ROS_INFO("Mavel setup, waiting for control inputs...");
+	ROS_INFO("Mavel ready, waiting for control inputs...");
 
 	//Timers for controllers
 	timer_controller_ = nhp_.createTimer( ros::Duration( 1.0 / param_rate_control_ ), &Mavel::controller_cb, this );
 }
 
 Mavel::~Mavel() {
-	ROS_INFO("Mavel shutting down...");
-
-	//TODO: Remember to free tf broadcaster
 }
 
 //==-- Process:
@@ -127,70 +120,78 @@ Mavel::~Mavel() {
 //	Send position, velocity, and acceleration feedback where relevant
 
 void Mavel::reference_odometry_cb( const nav_msgs::Odometry msg_in ) {
-	stream_update( &stream_reference_odometry_, &msg_in );
+	stream_update( stream_reference_odometry_, &msg_in );
 }
 
 void Mavel::reference_state_cb( const mavros_msgs::State msg_in ) {
-	stream_update( &stream_reference_state_, &msg_in );
+	stream_update( stream_reference_state_, &msg_in );
 }
 
 void Mavel::setpoint_position_cb( const geometry_msgs::PoseStamped msg_in ) {
-	stream_update( &stream_setpoint_position_, &msg_in );
+	stream_update( stream_setpoint_position_, &msg_in );
 }
 
 void Mavel::setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in ) {
-	stream_update( &stream_setpoint_velocity_, &msg_in );
+	stream_update( stream_setpoint_velocity_, &msg_in );
 }
 
 void Mavel::setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in ) {
-	stream_update( &stream_setpoint_acceleration_, &msg_in );
+	stream_update( stream_setpoint_acceleration_, &msg_in );
 }
 
 template<typename streamDataT>
-void Mavel::stream_init( mavel_data_stream<streamDataT>* stream, const double min_rate, const std::string topic ) {
-	stream->state = HEALTH_UNKNOWN;
+mavel_data_stream<streamDataT> Mavel::stream_init( const double min_rate, const std::string topic ) {
+	mavel_data_stream<streamDataT> stream;
 
-	stream->count = 0;
-	stream->stream_count = floor( 2 * min_rate );
-	stream->timeout = ros::Duration( 1.0 / min_rate );
+	stream.state = HEALTH_UNKNOWN;
 
-	stream->data.header.stamp = ros::Time( 0 );
-	stream->stream_topic = topic;
+	stream.count = 0;
+	stream.timeout = ros::Duration( 1.0 / min_rate );
+	stream.stream_count = floor( 2 * min_rate );
+	stream.stream_count = (stream.stream_count < 2) ? 2 : stream.stream_count;
+
+	stream.data.header.stamp = ros::Time( 0 );
+	stream.stream_topic = topic;
+
+	return stream;
 }
 
 template<typename streamDataT>
-void Mavel::stream_update( mavel_data_stream<streamDataT>* stream, const streamDataT* data ) {
-	stream->data = *data;
-	stream->count++;
+void Mavel::stream_update( mavel_data_stream<streamDataT> &stream, const streamDataT* data ) {
+	stream.data = *data;
+
+	//Only increment the counter if the stream data is fresh
+	if( ( ros::Time::now() - stream.data.header.stamp ) < stream.timeout )
+		stream.count++;
 }
 
 template<typename streamDataT>
-mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT>* stream, const ros::Time time_now ) {
+mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &stream) {
 	//If the latest data in the stream is older than the timeout
-	if( ( time_now - stream->data.header.stamp ) > stream->timeout ) {
+	if( ( ros::Time::now() - stream.data.header.stamp ) > stream.timeout ) {
 		//If the stream was previously OK, then send warning
-		if( stream->state == HEALTH_OK ) {
-			stream->state = HEALTH_TIMEOUT;
-			ROS_WARN("Stream timeout on: %s", ( ros::this_node::getName() + "/" + stream->stream_topic ).c_str() );
+		if( stream.state == HEALTH_OK ) {
+			stream.state = HEALTH_TIMEOUT;
+			ROS_WARN("Mavel stream timeout on: %s", stream.stream_topic.c_str() );
 		}
 
 		//Reset the stream counter
-		stream->count = 0;
-	} else if( ( stream->count > stream->stream_count ) && ( stream->state != HEALTH_OK ) ) {
+		stream.count = 0;
+	} else if( ( stream.count > stream.stream_count ) && ( stream.state != HEALTH_OK ) ) {
 		//If we have established a stream, and it wasn't already OK
-		stream->state = HEALTH_OK;
-		ROS_INFO("Stream connected on: %s", ( ros::this_node::getName() + "/" + stream->stream_topic ).c_str() );
+		stream.state = HEALTH_OK;
+		ROS_INFO("Mavel stream connected on: %s", stream.stream_topic.c_str() );
 	}
 
-	return stream->state;
+	return stream.state;
 }
 
 void Mavel::controller_cb( const ros::TimerEvent& te ) {
-	bool stream_ref_odom_ok = stream_check( &stream_reference_odometry_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_state_ok = stream_check( &stream_reference_state_, te.current_real ) == HEALTH_OK;
-	bool stream_sp_pos_ok = stream_check( &stream_setpoint_position_, te.current_real ) == HEALTH_OK;
-	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_, te.current_real ) == HEALTH_OK;
-	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_odom_ok = stream_check( stream_reference_odometry_ ) == HEALTH_OK;
+	bool stream_ref_state_ok = stream_check( stream_reference_state_ ) == HEALTH_OK;
+	bool stream_sp_pos_ok = stream_check( stream_setpoint_position_ ) == HEALTH_OK;
+	bool stream_sp_vel_ok = stream_check( stream_setpoint_velocity_ ) == HEALTH_OK;
+	bool stream_sp_accel_ok = stream_check( stream_setpoint_acceleration_ ) == HEALTH_OK;
 	bool stream_sp_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
 
 	bool setpoints_ok = ( stream_sp_accel_ok ) ||
@@ -252,9 +253,9 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	double dt = (te.current_real - te.last_real).toSec();
 
 	bool stream_sp_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
-	bool stream_sp_pos_ok = stream_check( &stream_setpoint_position_, te.current_real ) == HEALTH_OK;
-	bool stream_sp_vel_ok = stream_check( &stream_setpoint_velocity_, te.current_real ) == HEALTH_OK;
-	bool stream_sp_accel_ok = stream_check( &stream_setpoint_acceleration_, te.current_real ) == HEALTH_OK;
+	bool stream_sp_pos_ok = stream_check( stream_setpoint_position_ ) == HEALTH_OK;
+	bool stream_sp_vel_ok = stream_check( stream_setpoint_velocity_ ) == HEALTH_OK;
+	bool stream_sp_accel_ok = stream_check( stream_setpoint_acceleration_ ) == HEALTH_OK;
 
 	if( stream_sp_accel_ok ) {
 		goal_accel = stream_setpoint_acceleration_.data;
@@ -324,9 +325,9 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 			l_vel.z = 0.0;
 		}
 
-		goal_vel.twist.linear.x = l_vel.x + controller_pos_x_.step( dt, goal_pos.pose.position.x, ref_tf.getOrigin().getX(), ref_vel.getX() );
-		goal_vel.twist.linear.y = l_vel.y + controller_pos_y_.step( dt, goal_pos.pose.position.y, ref_tf.getOrigin().getY(), ref_vel.getY() );
-		goal_vel.twist.linear.z = l_vel.z + controller_pos_z_.step( dt, goal_pos.pose.position.z, ref_tf.getOrigin().getZ(), ref_vel.getZ() );
+		goal_vel.twist.linear.x = l_vel.x + controller_pos_x_.step( dt, goal_pos.pose.position.x, ref_tf.getOrigin().getX() );
+		goal_vel.twist.linear.y = l_vel.y + controller_pos_y_.step( dt, goal_pos.pose.position.y, ref_tf.getOrigin().getY() );
+		goal_vel.twist.linear.z = l_vel.z + controller_pos_z_.step( dt, goal_pos.pose.position.z, ref_tf.getOrigin().getZ() );
 	} else {
 		//Prevent PID wind-up
 		controller_pos_x_.reset( ref_tf.getOrigin().getX() );
