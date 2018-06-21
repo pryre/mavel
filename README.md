@@ -11,9 +11,10 @@ A position controller for multirotors
 The following setpoint reference inputs are processed in reverse order. If mavel is presented with a higher-level input, it will switch over to that as the current reference instead. Specifically, if a pose is setpoint is being tracked, and a twist reference is provided, the twist will be used instead.
 
 1. `~/reference/path` (`nav_msgs/Path`): Path input used for a trajectory reference
-2. `~/reference/pose` (`geometry_msgs/PoseStamped`): Pose setpoint input
-3. `~/reference/twist` (`geometry_msgs/TwistStamped`): Twist setpoint input (with yaw velocity tracking)
-4. `~/reference/accel` (`geometry_msgs/AccelStamped`): Acceleration setpoint input (with yaw acceleration tracking)
+2. `~/reference/traj` (`nav_msgs/Odometry`): Odometry input used for trajectory reference (with orientation tracking)
+2. `~/reference/pose` (`geometry_msgs/PoseStamped`): Pose used for position reference input (with orientation tracking)
+3. `~/reference/twist` (`geometry_msgs/TwistStamped`): Twist used for velocity reference input (with yaw velocity tracking)
+4. `~/reference/accel` (`geometry_msgs/AccelStamped`): Acceleration used for acceleration reference input (with yaw acceleration tracking)
 
 ## Outputs
 

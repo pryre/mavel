@@ -85,11 +85,12 @@ class Mavel {
 		ros::Publisher pub_output_acceleration_;
 		ros::Publisher pub_output_attitude_;
 
-		ros::Subscriber sub_reference_state_;
-		ros::Subscriber sub_reference_odometry_;
-		ros::Subscriber sub_setpoint_position_;
-		ros::Subscriber sub_setpoint_velocity_;
-		ros::Subscriber sub_setpoint_acceleration_;
+		ros::Subscriber sub_state_mav_;
+		ros::Subscriber sub_state_odometry_;
+		ros::Subscriber sub_reference_trajectory_;
+		ros::Subscriber sub_reference_position_;
+		ros::Subscriber sub_reference_velocity_;
+		ros::Subscriber sub_reference_acceleration_;
 
 		ros::Timer timer_controller_;
 		bool control_started_;
@@ -107,17 +108,19 @@ class Mavel {
 
 		//Rate in Hz
 		//Required stream count is derived as 2*rate
-		double param_stream_min_rate_reference_odometry_;
-		double param_stream_min_rate_reference_state_;
-		double param_stream_min_rate_setpoint_position_;
-		double param_stream_min_rate_setpoint_velocity_;
-		double param_stream_min_rate_setpoint_acceleration_;
+		double param_stream_min_rate_state_odometry_;
+		double param_stream_min_rate_state_mav_;
+		double param_stream_min_rate_reference_trajectory_;
+		double param_stream_min_rate_reference_position_;
+		double param_stream_min_rate_reference_velocity_;
+		double param_stream_min_rate_reference_acceleration_;
 
-		mavel_data_stream<nav_msgs::Odometry> stream_reference_odometry_;
-		mavel_data_stream<mavros_msgs::State> stream_reference_state_;
-		mavel_data_stream<geometry_msgs::PoseStamped> stream_setpoint_position_;
-		mavel_data_stream<geometry_msgs::TwistStamped> stream_setpoint_velocity_;
-		mavel_data_stream<geometry_msgs::AccelStamped> stream_setpoint_acceleration_;
+		mavel_data_stream<nav_msgs::Odometry> stream_state_odometry_;
+		mavel_data_stream<mavros_msgs::State> stream_state_mav_;
+		mavel_data_stream<nav_msgs::Odometry> stream_reference_trajectory_;
+		mavel_data_stream<geometry_msgs::PoseStamped> stream_reference_position_;
+		mavel_data_stream<geometry_msgs::TwistStamped> stream_reference_velocity_;
+		mavel_data_stream<geometry_msgs::AccelStamped> stream_reference_acceleration_;
 
 		PathExtract ref_path_;
 		pidController controller_pos_x_;
@@ -136,12 +139,13 @@ class Mavel {
 
 		~Mavel( void );
 
-		void reference_odometry_cb( const nav_msgs::Odometry msg_in );
-		void reference_state_cb( const mavros_msgs::State msg_in );
+		void state_odometry_cb( const nav_msgs::Odometry msg_in );
+		void state_mav_cb( const mavros_msgs::State msg_in );
 
-		void setpoint_position_cb( const geometry_msgs::PoseStamped msg_in );
-		void setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in );
-		void setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
+		void reference_trajectory_cb( const nav_msgs::Odometry msg_in );
+		void reference_position_cb( const geometry_msgs::PoseStamped msg_in );
+		void reference_velocity_cb( const geometry_msgs::TwistStamped msg_in );
+		void reference_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
 
 		//Handles the controller loop
 		void controller_cb( const ros::TimerEvent& timerCallback );
@@ -164,5 +168,5 @@ class Mavel {
 
 		//Checks the stream for a timeout
 		template<typename streamDataT>
-		mavel_data_stream_states stream_check( mavel_data_stream<streamDataT> &stream );
+		mavel_data_stream_states stream_check( mavel_data_stream<streamDataT> &stream, const ros::Time tc );
 };

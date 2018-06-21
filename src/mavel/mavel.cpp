@@ -54,17 +54,19 @@ Mavel::Mavel() :
 	nhp_.param( "control_frame", param_control_frame_id_, std::string("world") );
 
 	//Data streams
-	nhp_.param( "min_rate/reference/odometry", param_stream_min_rate_reference_odometry_, 25.0 );
-	nhp_.param( "min_rate/reference/state", param_stream_min_rate_reference_state_, 0.2 );
-	nhp_.param( "min_rate/setpoint/position", param_stream_min_rate_setpoint_position_, 5.0 );
-	nhp_.param( "min_rate/setpoint/velocity", param_stream_min_rate_setpoint_velocity_, 25.0 );
-	nhp_.param( "min_rate/setpoint/acceleration", param_stream_min_rate_setpoint_acceleration_, 50.0 );
+	nhp_.param( "min_rate/state/odometry", param_stream_min_rate_state_odometry_, 20.0 );
+	nhp_.param( "min_rate/state/mav_state", param_stream_min_rate_state_mav_, 0.2 );
+	nhp_.param( "min_rate/reference/trajectory", param_stream_min_rate_reference_trajectory_, 20.0 );
+	nhp_.param( "min_rate/reference/position", param_stream_min_rate_reference_position_, 5.0 );
+	nhp_.param( "min_rate/reference/velocity", param_stream_min_rate_reference_velocity_, 20.0 );
+	nhp_.param( "min_rate/reference/acceleration", param_stream_min_rate_reference_acceleration_, 40.0 );
 
-	stream_reference_odometry_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_reference_odometry_, "state/odometry" );
-	stream_reference_state_ = stream_init<mavros_msgs::State>( param_stream_min_rate_reference_state_, "state/mav_state" );
-	stream_setpoint_position_ = stream_init<geometry_msgs::PoseStamped>( param_stream_min_rate_setpoint_position_, "reference/pose" );
-	stream_setpoint_velocity_ = stream_init<geometry_msgs::TwistStamped>( param_stream_min_rate_setpoint_velocity_, "reference/twist" );
-	stream_setpoint_acceleration_ = stream_init<geometry_msgs::AccelStamped>( param_stream_min_rate_setpoint_acceleration_, "reference/accel" );
+	stream_state_odometry_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_state_odometry_, "state/odometry" );
+	stream_state_mav_ = stream_init<mavros_msgs::State>( param_stream_min_rate_state_mav_, "state/mav_state" );
+	stream_reference_trajectory_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_reference_trajectory_, "reference/traj" );
+	stream_reference_position_ = stream_init<geometry_msgs::PoseStamped>( param_stream_min_rate_reference_position_, "reference/pose" );
+	stream_reference_velocity_ = stream_init<geometry_msgs::TwistStamped>( param_stream_min_rate_reference_velocity_, "reference/twist" );
+	stream_reference_acceleration_ = stream_init<geometry_msgs::AccelStamped>( param_stream_min_rate_reference_acceleration_, "reference/accel" );
 
 	//Publishers
 	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( "command/attitude", 100 );
@@ -73,11 +75,12 @@ Mavel::Mavel() :
 	pub_output_position_ = nhp_.advertise<geometry_msgs::PoseStamped>( "feedback/pose", 100 );
 
 	//Subscribers
-	sub_reference_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( "state/odometry", 10, &Mavel::reference_odometry_cb, this );
-	sub_reference_state_ = nhp_.subscribe<mavros_msgs::State>( "state/mav_state", 10, &Mavel::reference_state_cb, this );
-	sub_setpoint_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( "reference/accel", 10, &Mavel::setpoint_acceleration_cb, this );
-	sub_setpoint_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "reference/twist", 10, &Mavel::setpoint_velocity_cb, this );
-	sub_setpoint_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/pose", 10, &Mavel::setpoint_position_cb, this );
+	sub_state_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( "state/odometry", 10, &Mavel::state_odometry_cb, this );
+	sub_state_mav_ = nhp_.subscribe<mavros_msgs::State>( "state/mav_state", 10, &Mavel::state_mav_cb, this );
+	sub_reference_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( "reference/accel", 10, &Mavel::reference_acceleration_cb, this );
+	sub_reference_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "reference/twist", 10, &Mavel::reference_velocity_cb, this );
+	sub_reference_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/pose", 10, &Mavel::reference_position_cb, this );
+	sub_reference_trajectory_ = nhp_.subscribe<nav_msgs::Odometry>( "reference/traj", 10, &Mavel::reference_trajectory_cb, this );
 
 	//ref_path_.set_latest( Eigen::Vector3d(param_home_x_, param_home_y_, param_home_z_), Eigen::Quaterniond::Identity() );
 
@@ -119,24 +122,28 @@ Mavel::~Mavel() {
 //	Send attitude target
 //	Send position, velocity, and acceleration feedback where relevant
 
-void Mavel::reference_odometry_cb( const nav_msgs::Odometry msg_in ) {
-	stream_update( stream_reference_odometry_, &msg_in );
+void Mavel::state_odometry_cb( const nav_msgs::Odometry msg_in ) {
+	stream_update( stream_state_odometry_, &msg_in );
 }
 
-void Mavel::reference_state_cb( const mavros_msgs::State msg_in ) {
-	stream_update( stream_reference_state_, &msg_in );
+void Mavel::state_mav_cb( const mavros_msgs::State msg_in ) {
+	stream_update( stream_state_mav_, &msg_in );
 }
 
-void Mavel::setpoint_position_cb( const geometry_msgs::PoseStamped msg_in ) {
-	stream_update( stream_setpoint_position_, &msg_in );
+void Mavel::reference_trajectory_cb( const nav_msgs::Odometry msg_in ) {
+	stream_update( stream_reference_trajectory_, &msg_in );
 }
 
-void Mavel::setpoint_velocity_cb( const geometry_msgs::TwistStamped msg_in ) {
-	stream_update( stream_setpoint_velocity_, &msg_in );
+void Mavel::reference_position_cb( const geometry_msgs::PoseStamped msg_in ) {
+	stream_update( stream_reference_position_, &msg_in );
 }
 
-void Mavel::setpoint_acceleration_cb( const geometry_msgs::AccelStamped msg_in ) {
-	stream_update( stream_setpoint_acceleration_, &msg_in );
+void Mavel::reference_velocity_cb( const geometry_msgs::TwistStamped msg_in ) {
+	stream_update( stream_reference_velocity_, &msg_in );
+}
+
+void Mavel::reference_acceleration_cb( const geometry_msgs::AccelStamped msg_in ) {
+	stream_update( stream_reference_acceleration_, &msg_in );
 }
 
 template<typename streamDataT>
@@ -146,9 +153,9 @@ mavel_data_stream<streamDataT> Mavel::stream_init( const double min_rate, const 
 	stream.state = HEALTH_UNKNOWN;
 
 	stream.count = 0;
-	stream.timeout = ros::Duration( 1.0 / min_rate );
+	stream.timeout = ros::Duration( ros::Rate(min_rate) );
 	stream.stream_count = floor( 2 * min_rate );
-	stream.stream_count = (stream.stream_count < 2) ? 2 : stream.stream_count;
+	stream.stream_count = (stream.stream_count < 2) ? 2 : stream.stream_count;	//Account for slow stream like state
 
 	stream.data.header.stamp = ros::Time( 0 );
 	stream.stream_topic = topic;
@@ -166,9 +173,9 @@ void Mavel::stream_update( mavel_data_stream<streamDataT> &stream, const streamD
 }
 
 template<typename streamDataT>
-mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &stream) {
+mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &stream, const ros::Time tc ) {
 	//If the latest data in the stream is older than the timeout
-	if( ( ros::Time::now() - stream.data.header.stamp ) > stream.timeout ) {
+	if( ( tc - stream.data.header.stamp ) > stream.timeout ) {
 		//If the stream was previously OK, then send warning
 		if( stream.state == HEALTH_OK ) {
 			stream.state = HEALTH_TIMEOUT;
@@ -187,28 +194,30 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &st
 }
 
 void Mavel::controller_cb( const ros::TimerEvent& te ) {
-	bool stream_ref_odom_ok = stream_check( stream_reference_odometry_ ) == HEALTH_OK;
-	bool stream_ref_state_ok = stream_check( stream_reference_state_ ) == HEALTH_OK;
-	bool stream_sp_pos_ok = stream_check( stream_setpoint_position_ ) == HEALTH_OK;
-	bool stream_sp_vel_ok = stream_check( stream_setpoint_velocity_ ) == HEALTH_OK;
-	bool stream_sp_accel_ok = stream_check( stream_setpoint_acceleration_ ) == HEALTH_OK;
-	bool stream_sp_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
+	bool stream_state_odom_ok = stream_check( stream_state_odometry_, te.current_real ) == HEALTH_OK;
+	bool stream_state_mav_ok = stream_check( stream_state_mav_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_traj_ok = stream_check( stream_reference_trajectory_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_accel_ok = stream_check( stream_reference_acceleration_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
 
-	bool setpoints_ok = ( stream_sp_accel_ok ) ||
-						( stream_sp_vel_ok && stream_ref_odom_ok ) ||
-						( stream_sp_pos_ok && stream_ref_odom_ok ) ||
-						( stream_sp_path_ok && stream_ref_odom_ok );
+	bool reference_ok = ( stream_ref_accel_ok ) ||
+						( stream_state_odom_ok && ( stream_ref_vel_ok ||
+													stream_ref_pos_ok ||
+													stream_ref_traj_ok ||
+													stream_ref_path_ok ) );
 
-	bool reference_ok = stream_ref_odom_ok && stream_ref_state_ok;
+	bool state_ok = stream_state_odom_ok && stream_state_mav_ok;
 
-	bool arm_ok = stream_reference_state_.data.armed;
+	bool arm_ok = stream_state_mav_.data.armed;
 
 	mavros_msgs::AttitudeTarget msg_out;
 	msg_out.orientation.w = 1.0;	//Just to make sure the quaternion is initialized correctly
 
 	if( !control_fatal_ ) {
 		if( !control_started_ ) {
-			if( reference_ok && setpoints_ok ) {
+			if( state_ok && reference_ok ) {
 				ROS_INFO_THROTTLE( 2.0, "Mavel ready, waiting for mav to be armed");
 
 				if( arm_ok ) {
@@ -219,7 +228,7 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 
 			do_failsafe( te, msg_out );
 		} else {
-			if( arm_ok && reference_ok ) {
+			if( arm_ok && state_ok ) {
 				do_control( te, msg_out );
 			} else {
 				control_fatal_ = true;
@@ -239,39 +248,45 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 
 void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &goal_att ) {
 	bool do_control_path = false;
+	bool do_control_traj = false;
 	bool do_control_pos = false;
 	bool do_control_vel = false;
 	bool do_control_accel = false;
 
+	nav_msgs::Odometry goal_traj;
 	geometry_msgs::PoseStamped goal_pos;
 	geometry_msgs::TwistStamped goal_vel;
 	geometry_msgs::AccelStamped goal_accel;
 
-	tf2::Transform ref_tf;
-	tf2::Vector3 ref_vel;
-
 	double dt = (te.current_real - te.last_real).toSec();
 
-	bool stream_sp_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
-	bool stream_sp_pos_ok = stream_check( stream_setpoint_position_ ) == HEALTH_OK;
-	bool stream_sp_vel_ok = stream_check( stream_setpoint_velocity_ ) == HEALTH_OK;
-	bool stream_sp_accel_ok = stream_check( stream_setpoint_acceleration_ ) == HEALTH_OK;
+	bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
+	bool stream_ref_traj_ok = stream_check( stream_reference_trajectory_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_accel_ok = stream_check( stream_reference_acceleration_, te.current_real ) == HEALTH_OK;
 
-	if( stream_sp_accel_ok ) {
-		goal_accel = stream_setpoint_acceleration_.data;
+	if( stream_ref_accel_ok ) {
+		goal_accel = stream_reference_acceleration_.data;
 		do_control_accel = true;
-	} else if( stream_sp_vel_ok ) {
-		goal_vel = stream_setpoint_velocity_.data;
+	} else if( stream_ref_vel_ok ) {
+		goal_vel = stream_reference_velocity_.data;
 
 		do_control_vel = true;
 		do_control_accel = true;
-	} else if ( stream_sp_pos_ok ) {
-		goal_pos = stream_setpoint_position_.data;
+	} else if ( stream_ref_pos_ok ) {
+		goal_pos = stream_reference_position_.data;
 
 		do_control_pos = true;
 		do_control_vel = true;
 		do_control_accel = true;
-	} else if ( stream_sp_path_ok ) {
+	} else if ( stream_ref_traj_ok ) {
+		goal_traj = stream_reference_trajectory_.data;
+
+		do_control_traj = true;
+		do_control_vel = true;
+		do_control_accel = true;
+	} else if ( stream_ref_path_ok ) {
 		//XXX: Set the goal inputs later on
 
 		do_control_path = true;
@@ -288,66 +303,88 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		ROS_ERROR_THROTTLE( 2.0, "[Timeout] Setpoint error! Emergency landing!");
 	}
 
-	tf2::Vector3 tmp_pos( stream_reference_odometry_.data.pose.pose.position.x,
-						  stream_reference_odometry_.data.pose.pose.position.y,
-						  stream_reference_odometry_.data.pose.pose.position.z );
+	tf2::Transform state_tf;
+	tf2::Vector3 state_vel;
 
-	tf2::Quaternion tmp_q( stream_reference_odometry_.data.pose.pose.orientation.x,
-						   stream_reference_odometry_.data.pose.pose.orientation.y,
-						   stream_reference_odometry_.data.pose.pose.orientation.z,
-						   stream_reference_odometry_.data.pose.pose.orientation.w );
+	tf2::Vector3 tmp_pos( stream_state_odometry_.data.pose.pose.position.x,
+						  stream_state_odometry_.data.pose.pose.position.y,
+						  stream_state_odometry_.data.pose.pose.position.z );
 
-	ref_tf = tf2::Transform( tmp_q, tmp_pos );
+	tf2::Quaternion tmp_q( stream_state_odometry_.data.pose.pose.orientation.x,
+						   stream_state_odometry_.data.pose.pose.orientation.y,
+						   stream_state_odometry_.data.pose.pose.orientation.z,
+						   stream_state_odometry_.data.pose.pose.orientation.w );
+
+	state_tf = tf2::Transform( tmp_q, tmp_pos );
 
 	tf2::Quaternion rot_vel;
-	rot_vel = ( tmp_q * tf2::Quaternion( stream_reference_odometry_.data.twist.twist.linear.x,
-									   stream_reference_odometry_.data.twist.twist.linear.y,
-									   stream_reference_odometry_.data.twist.twist.linear.z,
+	rot_vel = ( tmp_q * tf2::Quaternion( stream_state_odometry_.data.twist.twist.linear.x,
+									   stream_state_odometry_.data.twist.twist.linear.y,
+									   stream_state_odometry_.data.twist.twist.linear.z,
 									   0.0 ) ) * tmp_q.inverse();
 
-	ref_vel = tf2::Vector3( rot_vel.getX(), rot_vel.getY(), rot_vel.getZ() );
+	state_vel = tf2::Vector3( rot_vel.getX(), rot_vel.getY(), rot_vel.getZ() );
 
-	//Position/Path Control
-	if( do_control_pos || do_control_path ) {
+	//Position/Trajectory/Path Control
+	if( do_control_pos || do_control_traj || do_control_path ) {
 		goal_vel.header.frame_id = param_control_frame_id_;
 		goal_vel.header.stamp = te.current_real;
 
 		geometry_msgs::Vector3 l_vel;
 
-		if(do_control_path) {
-			goal_pos.header.frame_id = param_control_frame_id_;
-			goal_pos.header.stamp = te.current_real;
-			ref_path_.get_ref_state(goal_pos.pose, l_vel, te.current_real);
-		} else {
+		if(do_control_pos) {
 			//Just do the normal position control (set the additional velocity ref to 0)
 			l_vel.x = 0.0;
 			l_vel.y = 0.0;
 			l_vel.z = 0.0;
+		} else if(do_control_traj){
+			goal_pos.header.frame_id = param_control_frame_id_;
+			goal_pos.header.stamp = te.current_real;
+
+			tf2::Quaternion traj_q( stream_reference_trajectory_.data.pose.pose.orientation.x,
+									stream_reference_trajectory_.data.pose.pose.orientation.y,
+									stream_reference_trajectory_.data.pose.pose.orientation.z,
+									stream_reference_trajectory_.data.pose.pose.orientation.w );
+
+			tf2::Quaternion traj_rvel = ( traj_q * tf2::Quaternion( stream_reference_trajectory_.data.twist.twist.linear.x,
+											   stream_reference_trajectory_.data.twist.twist.linear.y,
+											   stream_reference_trajectory_.data.twist.twist.linear.z,
+											   0.0 ) ) * traj_q.inverse();
+
+			goal_pos.pose = stream_reference_trajectory_.data.pose.pose;
+			l_vel.x = traj_rvel.getX();
+			l_vel.y = traj_rvel.getY();
+			l_vel.z = traj_rvel.getZ();
+		} else {
+			//Else use the path input
+			goal_pos.header.frame_id = param_control_frame_id_;
+			goal_pos.header.stamp = te.current_real;
+			ref_path_.get_ref_state(goal_pos.pose, l_vel, te.current_real);
 		}
 
-		goal_vel.twist.linear.x = l_vel.x + controller_pos_x_.step( dt, goal_pos.pose.position.x, ref_tf.getOrigin().getX() );
-		goal_vel.twist.linear.y = l_vel.y + controller_pos_y_.step( dt, goal_pos.pose.position.y, ref_tf.getOrigin().getY() );
-		goal_vel.twist.linear.z = l_vel.z + controller_pos_z_.step( dt, goal_pos.pose.position.z, ref_tf.getOrigin().getZ() );
+		goal_vel.twist.linear.x = l_vel.x + controller_pos_x_.step( dt, goal_pos.pose.position.x, state_tf.getOrigin().getX() );
+		goal_vel.twist.linear.y = l_vel.y + controller_pos_y_.step( dt, goal_pos.pose.position.y, state_tf.getOrigin().getY() );
+		goal_vel.twist.linear.z = l_vel.z + controller_pos_z_.step( dt, goal_pos.pose.position.z, state_tf.getOrigin().getZ() );
 	} else {
 		//Prevent PID wind-up
-		controller_pos_x_.reset( ref_tf.getOrigin().getX() );
-		controller_pos_y_.reset( ref_tf.getOrigin().getY() );
-		controller_pos_z_.reset( ref_tf.getOrigin().getZ() );
+		controller_pos_x_.reset( state_tf.getOrigin().getX() );
+		controller_pos_y_.reset( state_tf.getOrigin().getY() );
+		controller_pos_z_.reset( state_tf.getOrigin().getZ() );
 	}
 
 	//Velocity Controller
 	if( do_control_vel ) {
-		goal_accel.header.frame_id = stream_setpoint_velocity_.data.header.frame_id;
+		goal_accel.header.frame_id = stream_reference_velocity_.data.header.frame_id;
 		goal_accel.header.stamp = te.current_real;
 
-		goal_accel.accel.linear.x = controller_vel_x_.step( dt, goal_vel.twist.linear.x, ref_vel.getX() );
-		goal_accel.accel.linear.y = controller_vel_y_.step( dt, goal_vel.twist.linear.y, ref_vel.getY() );
-		goal_accel.accel.linear.z = controller_vel_z_.step( dt, goal_vel.twist.linear.z, ref_vel.getZ() );
+		goal_accel.accel.linear.x = controller_vel_x_.step( dt, goal_vel.twist.linear.x, state_vel.getX() );
+		goal_accel.accel.linear.y = controller_vel_y_.step( dt, goal_vel.twist.linear.y, state_vel.getY() );
+		goal_accel.accel.linear.z = controller_vel_z_.step( dt, goal_vel.twist.linear.z, state_vel.getZ() );
 	} else {
 		//Prevent PID wind-up
-		controller_vel_x_.reset( ref_vel.getX() );
-		controller_vel_y_.reset( ref_vel.getY() );
-		controller_vel_z_.reset( ref_vel.getZ() );
+		controller_vel_x_.reset( state_vel.getX() );
+		controller_vel_y_.reset( state_vel.getY() );
+		controller_vel_z_.reset( state_vel.getZ() );
 	}
 
 	if( do_control_accel ) {
@@ -412,7 +449,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 		double roll_c, pitch_c, yaw_c;
 
-		if( do_control_pos ) {
+		if( do_control_pos ||  do_control_traj ||  do_control_path ) {
 			tf2::Quaternion q_c( goal_pos.pose.orientation.x,
 								 goal_pos.pose.orientation.y,
 								 goal_pos.pose.orientation.z,
@@ -469,13 +506,13 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	}
 
 	//Do orientation control
-	if( do_control_pos || do_control_path  ) {
+	if( do_control_pos || do_control_traj || do_control_path  ) {
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
 	} else if( do_control_vel ) {
-		goal_att.body_rate.z = stream_setpoint_velocity_.data.twist.angular.z;
+		goal_att.body_rate.z = stream_reference_velocity_.data.twist.angular.z;
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 	} else if ( do_control_accel ) {
-		integrator_body_rate_z_ += dt * stream_setpoint_acceleration_.data.accel.angular.z;
+		integrator_body_rate_z_ += dt * stream_reference_acceleration_.data.accel.angular.z;
 		goal_att.body_rate.z = integrator_body_rate_z_;
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 	}
@@ -491,7 +528,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	if( do_control_vel )
 		pub_output_velocity_.publish( goal_vel );
 
-	if( do_control_pos || do_control_path )
+	if( do_control_pos || do_control_traj || do_control_path )
 		pub_output_position_.publish( goal_pos );
 }
 
