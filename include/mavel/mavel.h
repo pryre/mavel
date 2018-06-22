@@ -139,6 +139,9 @@ class Mavel {
 
 		~Mavel( void );
 
+		bool flight_ready( const ros::Time check_time );
+
+	private:
 		void state_odometry_cb( const nav_msgs::Odometry msg_in );
 		void state_mav_cb( const mavros_msgs::State msg_in );
 
@@ -152,10 +155,6 @@ class Mavel {
 		void do_control( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget &goal_att );
 		void do_failsafe( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget &goal_att );
 
-	private:
-		//Initializes the pid parameters for a controller
-		//param_base_name should be set first (e.g. "~/pid/position/")
-		void param_pid_init( mavel_params_pid* pid, std::string controller_name );
 
 		//Initializes the stream parameters
 		template<typename streamDataT>

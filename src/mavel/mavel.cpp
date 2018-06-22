@@ -146,6 +146,16 @@ void Mavel::reference_acceleration_cb( const geometry_msgs::AccelStamped msg_in 
 	stream_update( stream_reference_acceleration_, &msg_in );
 }
 
+bool Mavel::flight_ready( const ros::Time check_time ) {
+	bool ready = false;
+
+	if( stream_check( stream_state_mav_, check_time ) ) {
+		ready = stream_state_mav_.data.armed && (stream_state_mav_.data.mode == "OFFBOARD");
+	}
+
+	return ready;
+}
+
 template<typename streamDataT>
 mavel_data_stream<streamDataT> Mavel::stream_init( const double min_rate, const std::string topic ) {
 	mavel_data_stream<streamDataT> stream;
@@ -195,7 +205,6 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &st
 
 void Mavel::controller_cb( const ros::TimerEvent& te ) {
 	bool stream_state_odom_ok = stream_check( stream_state_odometry_, te.current_real ) == HEALTH_OK;
-	bool stream_state_mav_ok = stream_check( stream_state_mav_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_traj_ok = stream_check( stream_reference_trajectory_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
@@ -208,9 +217,8 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 													stream_ref_traj_ok ||
 													stream_ref_path_ok ) );
 
-	bool state_ok = stream_state_odom_ok && stream_state_mav_ok;
-
-	bool arm_ok = stream_state_mav_.data.armed;
+	bool state_ok = stream_state_odom_ok;
+	bool arm_ok = flight_ready(te.current_real);
 
 	mavros_msgs::AttitudeTarget msg_out;
 	msg_out.orientation.w = 1.0;	//Just to make sure the quaternion is initialized correctly
