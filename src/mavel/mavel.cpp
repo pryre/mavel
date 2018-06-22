@@ -149,7 +149,7 @@ void Mavel::reference_acceleration_cb( const geometry_msgs::AccelStamped msg_in 
 bool Mavel::flight_ready( const ros::Time check_time ) {
 	bool ready = false;
 
-	if( stream_check( stream_state_mav_, check_time ) ) {
+	if( stream_check( stream_state_mav_, check_time ) == HEALTH_OK ) {
 		ready = stream_state_mav_.data.armed && (stream_state_mav_.data.mode == "OFFBOARD");
 	}
 
