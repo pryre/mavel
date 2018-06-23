@@ -112,7 +112,7 @@ catkin_package(
 #  LIBRARIES mavel
 #  CATKIN_DEPENDS geometry_msgs roscpp tf
 #  DEPENDS system_lib
-  DEPENDS Eigen3
+#  DEPENDS Eigen3
 )
 
 ###########
@@ -125,7 +125,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${Eigen3_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
