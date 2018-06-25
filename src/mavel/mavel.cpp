@@ -50,6 +50,7 @@ Mavel::Mavel() :
 	nhp_.param( "throttle/max", param_throttle_max_, 0.9 );
 
 	nhp_.param( "failsafe_land_vel", param_land_vel_, -0.2 );
+	nhp_.param( "failsafe_output_on_fatal", param_output_low_on_fatal_, false );
 
 	nhp_.param( "control_frame", param_control_frame_id_, std::string("world") );
 
@@ -60,6 +61,12 @@ Mavel::Mavel() :
 	nhp_.param( "min_rate/reference/position", param_stream_min_rate_reference_position_, 5.0 );
 	nhp_.param( "min_rate/reference/velocity", param_stream_min_rate_reference_velocity_, 20.0 );
 	nhp_.param( "min_rate/reference/acceleration", param_stream_min_rate_reference_acceleration_, 40.0 );
+
+	//Sanity check some parameters
+	if( ( param_land_vel_ >= 0.0) ) {
+		 ROS_FATAL("Invalid parameter settings, quiting mavel");
+		 ros::shutdown();
+	}
 
 	stream_state_odometry_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_state_odometry_, "state/odometry" );
 	stream_state_mav_ = stream_init<mavros_msgs::State>( param_stream_min_rate_state_mav_, "state/mav_state" );
@@ -81,8 +88,6 @@ Mavel::Mavel() :
 	sub_reference_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "reference/twist", 10, &Mavel::reference_velocity_cb, this );
 	sub_reference_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/pose", 10, &Mavel::reference_position_cb, this );
 	sub_reference_trajectory_ = nhp_.subscribe<nav_msgs::Odometry>( "reference/traj", 10, &Mavel::reference_trajectory_cb, this );
-
-	//ref_path_.set_latest( Eigen::Vector3d(param_home_x_, param_home_y_, param_home_z_), Eigen::Quaterniond::Identity() );
 
 	//Wait for streams before starting
 	ROS_INFO("Mavel ready, waiting for control inputs...");
@@ -247,11 +252,13 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 		do_failsafe( te, msg_out );
 	}
 
-	//Add in headers for attitude taget
-	msg_out.header.frame_id = param_control_frame_id_;
-	msg_out.header.stamp = te.current_real;
+	if( (!control_fatal_) || param_output_low_on_fatal_) {
+		//Add in headers for attitude taget
+		msg_out.header.frame_id = param_control_frame_id_;
+		msg_out.header.stamp = te.current_real;
 
-	pub_output_attitude_.publish( msg_out );
+		pub_output_attitude_.publish( msg_out );
+	}
 }
 
 void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &goal_att ) {

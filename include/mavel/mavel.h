@@ -102,9 +102,7 @@ class Mavel {
 		double param_throttle_mid_;
 		double param_throttle_max_;
 		double param_land_vel_;
-		double param_home_x_;
-		double param_home_y_;
-		double param_home_z_;
+		bool param_output_low_on_fatal_;
 
 		//Rate in Hz
 		//Required stream count is derived as 2*rate
