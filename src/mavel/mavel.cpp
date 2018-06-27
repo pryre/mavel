@@ -62,6 +62,14 @@ Mavel::Mavel() :
 	nhp_.param( "min_rate/reference/velocity", param_stream_min_rate_reference_velocity_, 20.0 );
 	nhp_.param( "min_rate/reference/acceleration", param_stream_min_rate_reference_acceleration_, 40.0 );
 
+	/*
+	ROS_INFO("Minimum Rate (odom): %0.4f", param_stream_min_rate_state_odometry_);
+	ROS_INFO("Minimum Rate (mav): %0.4f", param_stream_min_rate_state_mav_);
+	ROS_INFO("Minimum Rate (traj): %0.4f", param_stream_min_rate_reference_trajectory_);
+	ROS_INFO("Minimum Rate (pos): %0.4f", param_stream_min_rate_reference_position_);
+	ROS_INFO("Minimum Rate (vel): %0.4f", param_stream_min_rate_reference_velocity_);
+	ROS_INFO("Minimum Rate (accel): %0.4f", param_stream_min_rate_reference_acceleration_);
+	*/
 	//Sanity check some parameters
 	if( ( param_land_vel_ >= 0.0) ) {
 		 ROS_FATAL("Invalid parameter settings, quiting mavel");
@@ -252,7 +260,7 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 		do_failsafe( te, msg_out );
 	}
 
-	if( (!control_fatal_) || param_output_low_on_fatal_) {
+	if( (!control_fatal_) || (!control_started_ || param_output_low_on_fatal_) ) {
 		//Add in headers for attitude taget
 		msg_out.header.frame_id = param_control_frame_id_;
 		msg_out.header.stamp = te.current_real;
