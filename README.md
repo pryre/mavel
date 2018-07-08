@@ -53,4 +53,4 @@ The following setpoint reference inputs are processed in reverse order. If mavel
 #### Control Feedback
 - `~/feedback/pose` (`geometry_msgs/PoseStamped`): The currently tracked pose reference
 - `~/feedback/twist` (`geometry_msgs/TwistStamped`): The currently tracked twist reference
-- `~/feedback/accel` (`geometry_msgs/AccelStamped`): The currently tracked acceleration reference
+- `~/feedback/accel_norm` (`geometry_msgs/AccelStamped`): The currently tracked normalized acceleration reference
