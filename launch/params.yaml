@@ -26,13 +26,15 @@ allow_timeout_position: false
 
 # Data Stream Rates
 min_rate:
+  state:
+    mav_state: 0.2
+    odometry: 20.0
   reference:
-    state: 0.5
-    odometry: 10.0
-  setpoint:
+    trajectory: 20.0
+    triplet: 20.0
     position: 5.0
-    velocity: 10.0
-    acceleration: 20.0
+    velocity: 20.0
+    acceleration: 40.0
 
 # PID Controllers
 control:
