@@ -32,6 +32,8 @@ Mavel::Mavel() :
 	nhp_( "~" ),
 	control_started_(false),
 	control_fatal_(false),
+	param_got_valid_pos_(false),
+	param_got_valid_traj_(false),
 	integrator_body_rate_z_( 0.0 ),
 	ref_path_(&nhp_),
 	controller_pos_x_(&nhp_, "control/pos/x"),
@@ -51,6 +53,7 @@ Mavel::Mavel() :
 
 	nhp_.param( "failsafe_land_vel", param_land_vel_, -0.2 );
 	nhp_.param( "failsafe_output_on_fatal", param_output_low_on_fatal_, false );
+	nhp_.param( "allow_timeout_position", param_allow_timeout_position_, false );
 
 	nhp_.param( "control_frame", param_control_frame_id_, std::string("world") );
 
@@ -145,10 +148,18 @@ void Mavel::state_mav_cb( const mavros_msgs::State msg_in ) {
 
 void Mavel::reference_trajectory_cb( const nav_msgs::Odometry msg_in ) {
 	stream_update( stream_reference_trajectory_, &msg_in );
+
+	//Just check if the message header is OK
+	if(msg_in.header.stamp > ros::Time(0))
+		param_got_valid_traj_ = true;
 }
 
 void Mavel::reference_position_cb( const geometry_msgs::PoseStamped msg_in ) {
 	stream_update( stream_reference_position_, &msg_in );
+
+	//Just check if the message header is OK
+	if(msg_in.header.stamp > ros::Time(0))
+		param_got_valid_pos_ = true;
 }
 
 void Mavel::reference_velocity_cb( const geometry_msgs::TwistStamped msg_in ) {
@@ -222,12 +233,14 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 	bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_accel_ok = stream_check( stream_reference_acceleration_, te.current_real ) == HEALTH_OK;
+	bool stream_ref_tpos_ok = param_allow_timeout_position_ && (param_got_valid_pos_ || param_got_valid_traj_);
 	bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
 
 	bool reference_ok = ( stream_ref_accel_ok ) ||
 						( stream_state_odom_ok && ( stream_ref_vel_ok ||
 													stream_ref_pos_ok ||
 													stream_ref_traj_ok ||
+													stream_ref_tpos_ok ||
 													stream_ref_path_ok ) );
 
 	bool state_ok = stream_state_odom_ok;
@@ -283,7 +296,11 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 	double dt = (te.current_real - te.last_real).toSec();
 
-	bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
+	//Don't use a real stream for high-level, as it's more of a once off
+	bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback();
+	bool stream_ref_tpos_ok = param_allow_timeout_position_ && (param_got_valid_pos_ || param_got_valid_traj_);
+
+	//Real input streams
 	bool stream_ref_traj_ok = stream_check( stream_reference_trajectory_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
@@ -307,6 +324,18 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		goal_traj = stream_reference_trajectory_.data;
 
 		do_control_traj = true;
+		do_control_vel = true;
+		do_control_accel = true;
+	} else if ( stream_ref_tpos_ok ) {
+		if(param_got_valid_pos_) {
+			goal_pos = stream_reference_position_.data;
+		} else {	//param_got_valid_traj_ == true
+			//But handle it as a pure position setpoint
+			goal_pos.header = stream_reference_trajectory_.data.header;
+			goal_pos.pose = stream_reference_trajectory_.data.pose.pose;
+		}
+
+		do_control_pos = true;
 		do_control_vel = true;
 		do_control_accel = true;
 	} else if ( stream_ref_path_ok ) {

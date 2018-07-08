@@ -104,6 +104,10 @@ class Mavel {
 		double param_land_vel_;
 		bool param_output_low_on_fatal_;
 
+		bool param_allow_timeout_position_;
+		bool param_got_valid_pos_;
+		bool param_got_valid_traj_;
+
 		//Rate in Hz
 		//Required stream count is derived as 2*rate
 		double param_stream_min_rate_state_odometry_;

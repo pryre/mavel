@@ -19,6 +19,11 @@ failsafe_land_vel: -0.2 # Must be negative!
 # (enable if the low level device has an unreliable failsafe)
 failsafe_output_fatal: false
 
+# Allows fallback to the last position received if a timeout
+# occurs on the position/trajectory reference
+# (can be abused to allow once-off position goals to be sent)
+allow_timeout_position: false
+
 # Data Stream Rates
 min_rate:
   reference:
