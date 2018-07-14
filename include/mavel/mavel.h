@@ -14,7 +14,7 @@
 #include <mavros_msgs/AttitudeTarget.h>
 
 #include <eigen3/Eigen/Dense>
-#include <contrail/path_extract.h>
+#include <contrail/ContrailManager.h>
 #include <pid_controller_lib/pidController.h>
 
 #include <string>
@@ -50,9 +50,9 @@
 
 //Setup some defines to make handling triplet stream easier
 //Full position and yaw goal
-#define TRIPLET_FULL_POS 0b101111111000
+#define TRIPLET_FULL_POS 0b100111111000
 //Full velocity and rate goal
-#define TRIPLET_FULL_VEL 0b011111000111
+#define TRIPLET_FULL_VEL 0b010111000111
 //Full position and velocity goals
 #define TRIPLET_FULL_TRAJ (TRIPLET_FULL_POS & TRIPLET_FULL_VEL)
 //Full position and velocity goal, but no rate
@@ -99,10 +99,10 @@ class Mavel {
 		ros::Subscriber sub_state_mav_;
 		ros::Subscriber sub_state_odometry_;
 		ros::Subscriber sub_reference_triplet_;
-		ros::Subscriber sub_reference_trajectory_;
-		ros::Subscriber sub_reference_position_;
-		ros::Subscriber sub_reference_velocity_;
-		ros::Subscriber sub_reference_acceleration_;
+		//ros::Subscriber sub_reference_trajectory_;
+		//ros::Subscriber sub_reference_position_;
+		//ros::Subscriber sub_reference_velocity_;
+		//ros::Subscriber sub_reference_acceleration_;
 
 		ros::Timer timer_controller_;
 		bool control_started_;
@@ -117,8 +117,8 @@ class Mavel {
 		bool param_output_low_on_fatal_;
 
 		bool param_allow_timeout_position_;
-		bool param_got_valid_pos_;
-		bool param_got_valid_traj_;
+		//bool param_got_valid_pos_;
+		//bool param_got_valid_traj_;
 		bool param_got_valid_tri_;
 
 		//Rate in Hz
@@ -126,20 +126,20 @@ class Mavel {
 		double param_stream_min_rate_state_odometry_;
 		double param_stream_min_rate_state_mav_;
 		double param_stream_min_rate_reference_triplet_;
-		double param_stream_min_rate_reference_trajectory_;
-		double param_stream_min_rate_reference_position_;
-		double param_stream_min_rate_reference_velocity_;
-		double param_stream_min_rate_reference_acceleration_;
+		//double param_stream_min_rate_reference_trajectory_;
+		//double param_stream_min_rate_reference_position_;
+		//double param_stream_min_rate_reference_velocity_;
+		//double param_stream_min_rate_reference_acceleration_;
 
 		mavel_data_stream<nav_msgs::Odometry> stream_state_odometry_;
 		mavel_data_stream<mavros_msgs::State> stream_state_mav_;
 		mavel_data_stream<mavros_msgs::PositionTarget> stream_reference_triplet_;
-		mavel_data_stream<nav_msgs::Odometry> stream_reference_trajectory_;
-		mavel_data_stream<geometry_msgs::PoseStamped> stream_reference_position_;
-		mavel_data_stream<geometry_msgs::TwistStamped> stream_reference_velocity_;
-		mavel_data_stream<geometry_msgs::AccelStamped> stream_reference_acceleration_;
+		//mavel_data_stream<nav_msgs::Odometry> stream_reference_trajectory_;
+		//mavel_data_stream<geometry_msgs::PoseStamped> stream_reference_position_;
+		//mavel_data_stream<geometry_msgs::TwistStamped> stream_reference_velocity_;
+		//mavel_data_stream<geometry_msgs::AccelStamped> stream_reference_acceleration_;
 
-		PathExtract ref_path_;
+		ContrailManager ref_path_;
 		pidController controller_pos_x_;
 		pidController controller_pos_y_;
 		pidController controller_pos_z_;
@@ -147,7 +147,7 @@ class Mavel {
 		pidController controller_vel_y_;
 		pidController controller_vel_z_;
 
-		double integrator_body_rate_z_;
+		//double integrator_body_rate_z_;
 
 		std::string param_control_frame_id_;
 
@@ -163,10 +163,10 @@ class Mavel {
 		void state_mav_cb( const mavros_msgs::State msg_in );
 
 		void reference_triplet_cb( const mavros_msgs::PositionTarget msg_in );
-		void reference_trajectory_cb( const nav_msgs::Odometry msg_in );
-		void reference_position_cb( const geometry_msgs::PoseStamped msg_in );
-		void reference_velocity_cb( const geometry_msgs::TwistStamped msg_in );
-		void reference_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
+		//void reference_trajectory_cb( const nav_msgs::Odometry msg_in );
+		//void reference_position_cb( const geometry_msgs::PoseStamped msg_in );
+		//void reference_velocity_cb( const geometry_msgs::TwistStamped msg_in );
+		//void reference_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
 
 		//Handles the controller loop
 		void controller_cb( const ros::TimerEvent& timerCallback );

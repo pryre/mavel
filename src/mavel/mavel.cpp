@@ -33,11 +33,11 @@ Mavel::Mavel() :
 	nhp_( "~" ),
 	control_started_(false),
 	control_fatal_(false),
-	param_got_valid_pos_(false),
-	param_got_valid_traj_(false),
+	//param_got_valid_pos_(false),
+	//param_got_valid_traj_(false),
 	param_got_valid_tri_(false),
-	integrator_body_rate_z_( 0.0 ),
-	ref_path_(&nhp_),
+	//integrator_body_rate_z_( 0.0 ),
+	ref_path_(nhp_),
 	controller_pos_x_(&nhp_, "control/pos/x"),
 	controller_pos_y_(&nhp_, "control/pos/y"),
 	controller_pos_z_(&nhp_, "control/pos/z"),
@@ -63,10 +63,10 @@ Mavel::Mavel() :
 	nhp_.param( "min_rate/state/odometry", param_stream_min_rate_state_odometry_, 20.0 );
 	nhp_.param( "min_rate/state/mav_state", param_stream_min_rate_state_mav_, 0.2 );
 	nhp_.param( "min_rate/reference/triplet", param_stream_min_rate_reference_triplet_, 20.0 );
-	nhp_.param( "min_rate/reference/trajectory", param_stream_min_rate_reference_trajectory_, 20.0 );
-	nhp_.param( "min_rate/reference/position", param_stream_min_rate_reference_position_, 5.0 );
-	nhp_.param( "min_rate/reference/velocity", param_stream_min_rate_reference_velocity_, 20.0 );
-	nhp_.param( "min_rate/reference/acceleration", param_stream_min_rate_reference_acceleration_, 40.0 );
+	//nhp_.param( "min_rate/reference/trajectory", param_stream_min_rate_reference_trajectory_, 20.0 );
+	//nhp_.param( "min_rate/reference/position", param_stream_min_rate_reference_position_, 5.0 );
+	//nhp_.param( "min_rate/reference/velocity", param_stream_min_rate_reference_velocity_, 20.0 );
+	//nhp_.param( "min_rate/reference/acceleration", param_stream_min_rate_reference_acceleration_, 40.0 );
 
 	/*
 	ROS_INFO("Minimum Rate (odom): %0.4f", param_stream_min_rate_state_odometry_);
@@ -85,10 +85,10 @@ Mavel::Mavel() :
 	stream_state_odometry_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_state_odometry_, "state/odometry" );
 	stream_state_mav_ = stream_init<mavros_msgs::State>( param_stream_min_rate_state_mav_, "state/mav_state" );
 	stream_reference_triplet_ = stream_init<mavros_msgs::PositionTarget>( param_stream_min_rate_reference_triplet_, "reference/triplet" );
-	stream_reference_trajectory_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_reference_trajectory_, "reference/traj" );
-	stream_reference_position_ = stream_init<geometry_msgs::PoseStamped>( param_stream_min_rate_reference_position_, "reference/pose" );
-	stream_reference_velocity_ = stream_init<geometry_msgs::TwistStamped>( param_stream_min_rate_reference_velocity_, "reference/twist" );
-	stream_reference_acceleration_ = stream_init<geometry_msgs::AccelStamped>( param_stream_min_rate_reference_acceleration_, "reference/accel" );
+	//stream_reference_trajectory_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_reference_trajectory_, "reference/traj" );
+	//stream_reference_position_ = stream_init<geometry_msgs::PoseStamped>( param_stream_min_rate_reference_position_, "reference/pose" );
+	//stream_reference_velocity_ = stream_init<geometry_msgs::TwistStamped>( param_stream_min_rate_reference_velocity_, "reference/twist" );
+	//stream_reference_acceleration_ = stream_init<geometry_msgs::AccelStamped>( param_stream_min_rate_reference_acceleration_, "reference/accel" );
 
 	//Publishers
 	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( "command/attitude", 100 );
@@ -99,10 +99,10 @@ Mavel::Mavel() :
 	//Subscribers
 	sub_state_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( "state/odometry", 10, &Mavel::state_odometry_cb, this );
 	sub_state_mav_ = nhp_.subscribe<mavros_msgs::State>( "state/mav_state", 10, &Mavel::state_mav_cb, this );
-	sub_reference_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( "reference/accel", 10, &Mavel::reference_acceleration_cb, this );
-	sub_reference_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "reference/twist", 10, &Mavel::reference_velocity_cb, this );
-	sub_reference_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/pose", 10, &Mavel::reference_position_cb, this );
-	sub_reference_trajectory_ = nhp_.subscribe<nav_msgs::Odometry>( "reference/traj", 10, &Mavel::reference_trajectory_cb, this );
+	//sub_reference_acceleration_ = nhp_.subscribe<geometry_msgs::AccelStamped>( "reference/accel", 10, &Mavel::reference_acceleration_cb, this );
+	//sub_reference_velocity_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "reference/twist", 10, &Mavel::reference_velocity_cb, this );
+	//sub_reference_position_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/pose", 10, &Mavel::reference_position_cb, this );
+	//sub_reference_trajectory_ = nhp_.subscribe<nav_msgs::Odometry>( "reference/traj", 10, &Mavel::reference_trajectory_cb, this );
 	sub_reference_triplet_ = nhp_.subscribe<mavros_msgs::PositionTarget>( "reference/triplet", 10, &Mavel::reference_triplet_cb, this );
 
 	//Wait for streams before starting
@@ -154,14 +154,14 @@ void Mavel::state_mav_cb( const mavros_msgs::State msg_in ) {
 void Mavel::reference_triplet_cb( const mavros_msgs::PositionTarget msg_in ) {
 	//Check to make sure we're in the right reference frame
 	if(msg_in.coordinate_frame == msg_in.FRAME_LOCAL_NED) {
-		if( (msg_in.type_mask == TRIPLET_FULL_POS) ||
-			(msg_in.type_mask == TRIPLET_FULL_VEL) ||
-			(msg_in.type_mask == TRIPLET_FULL_TRAJ) ) {
+		if( (msg_in.type_mask & TRIPLET_FULL_POS) ||
+			(msg_in.type_mask & TRIPLET_FULL_VEL) ||
+			(msg_in.type_mask & TRIPLET_FULL_TRAJ) ) {
 
 			stream_update( stream_reference_triplet_, &msg_in );
 
 			if( (msg_in.header.stamp > ros::Time(0)) &&
-				( (msg_in.type_mask == TRIPLET_FULL_POS) || (msg_in.type_mask == TRIPLET_FULL_TRAJ) ) ) {
+				( (msg_in.type_mask & TRIPLET_FULL_POS) || (msg_in.type_mask & TRIPLET_FULL_TRAJ) ) ) {
 
 				if(param_allow_timeout_position_ && !param_got_valid_tri_) {
 					ROS_INFO("Mavel stream fallback initialized on: %s", stream_reference_triplet_.stream_topic.c_str() );
@@ -178,7 +178,7 @@ void Mavel::reference_triplet_cb( const mavros_msgs::PositionTarget msg_in ) {
 		ROS_WARN_THROTTLE(2.0, "Unsupported triplet coordinate frame: %i", msg_in.coordinate_frame);
 	}
 }
-
+/*
 void Mavel::reference_trajectory_cb( const nav_msgs::Odometry msg_in ) {
 	stream_update( stream_reference_trajectory_, &msg_in );
 
@@ -212,7 +212,7 @@ void Mavel::reference_velocity_cb( const geometry_msgs::TwistStamped msg_in ) {
 void Mavel::reference_acceleration_cb( const geometry_msgs::AccelStamped msg_in ) {
 	stream_update( stream_reference_acceleration_, &msg_in );
 }
-
+*/
 bool Mavel::flight_ready( const ros::Time check_time ) {
 	bool ready = false;
 
@@ -273,18 +273,19 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &st
 void Mavel::controller_cb( const ros::TimerEvent& te ) {
 	bool stream_state_odom_ok = stream_check( stream_state_odometry_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_tri_ok = stream_check( stream_reference_triplet_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_traj_ok = stream_check( stream_reference_trajectory_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_accel_ok = stream_check( stream_reference_acceleration_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_tpos_ok = param_allow_timeout_position_ && (param_got_valid_pos_ || param_got_valid_traj_ || param_got_valid_tri_);
-	bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
+	//bool stream_ref_traj_ok = stream_check( stream_reference_trajectory_, te.current_real ) == HEALTH_OK;
+	//bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
+	//bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
+	//bool stream_ref_accel_ok = stream_check( stream_reference_acceleration_, te.current_real ) == HEALTH_OK;
+	//bool stream_ref_tpos_ok = param_allow_timeout_position_ && (param_got_valid_pos_ || param_got_valid_traj_ || param_got_valid_tri_);
+	//bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback(); //Don't use a real stream, as it's more of a once off
+	bool stream_ref_path_ok = ref_path_.has_reference(te.current_real); //Don't use a real stream, as it's more of a once off
 
-	bool reference_ok = ( stream_ref_accel_ok ) ||
-						( stream_state_odom_ok && ( stream_ref_vel_ok ||
-													stream_ref_pos_ok ||
-													stream_ref_traj_ok ||
-													stream_ref_tpos_ok ||
+	bool reference_ok = //( stream_ref_accel_ok ) ||
+						( stream_state_odom_ok && ( //stream_ref_vel_ok ||
+													//stream_ref_pos_ok ||
+													//stream_ref_traj_ok ||
+													//stream_ref_tpos_ok ||
 													stream_ref_path_ok ||
 													stream_ref_tri_ok ) );
 
@@ -332,6 +333,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	bool do_control_vel = false;
 	bool do_control_accel = false;
 
+	mavros_msgs::PositionTarget goal_tri;
 	geometry_msgs::PoseStamped goal_pos;
 	geometry_msgs::TwistStamped goal_vel;
 	geometry_msgs::AccelStamped goal_accel;
@@ -339,21 +341,44 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	double dt = (te.current_real - te.last_real).toSec();
 
 	//Don't use a real stream for high-level, as it's more of a once off
-	bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback();
-	bool stream_ref_tpos_ok = param_allow_timeout_position_ && (param_got_valid_pos_ || param_got_valid_traj_ || param_got_valid_tri_);
+	//bool stream_ref_path_ok = ref_path_.has_valid_path() || ref_path_.has_valid_fallback();
+	//bool stream_ref_tpos_ok = param_allow_timeout_position_ && (param_got_valid_pos_ || param_got_valid_traj_ || param_got_valid_tri_);
 
 	//Real input streams
 	bool stream_ref_tri_ok = stream_check( stream_reference_triplet_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_traj_ok = stream_check( stream_reference_trajectory_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
-	bool stream_ref_accel_ok = stream_check( stream_reference_acceleration_, te.current_real ) == HEALTH_OK;
+	//bool stream_ref_traj_ok = stream_check( stream_reference_trajectory_, te.current_real ) == HEALTH_OK;
+	//bool stream_ref_pos_ok = stream_check( stream_reference_position_, te.current_real ) == HEALTH_OK;
+	//bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
+	//bool stream_ref_accel_ok = stream_check( stream_reference_acceleration_, te.current_real ) == HEALTH_OK;
 
 	geometry_msgs::Vector3 l_vel_ref;
 	l_vel_ref.x = 0.0;
 	l_vel_ref.y = 0.0;
 	l_vel_ref.z = 0.0;
 
+	tf2::Transform state_tf;
+	tf2::Vector3 state_vel;
+
+	tf2::Vector3 tmp_pos( stream_state_odometry_.data.pose.pose.position.x,
+						  stream_state_odometry_.data.pose.pose.position.y,
+						  stream_state_odometry_.data.pose.pose.position.z );
+
+	tf2::Quaternion tmp_q( stream_state_odometry_.data.pose.pose.orientation.x,
+						   stream_state_odometry_.data.pose.pose.orientation.y,
+						   stream_state_odometry_.data.pose.pose.orientation.z,
+						   stream_state_odometry_.data.pose.pose.orientation.w );
+
+	state_tf = tf2::Transform( tmp_q, tmp_pos );
+
+	tf2::Quaternion rot_vel;
+	rot_vel = ( tmp_q * tf2::Quaternion( stream_state_odometry_.data.twist.twist.linear.x,
+									   stream_state_odometry_.data.twist.twist.linear.y,
+									   stream_state_odometry_.data.twist.twist.linear.z,
+									   0.0 ) ) * tmp_q.inverse();
+
+	state_vel = tf2::Vector3( rot_vel.getX(), rot_vel.getY(), rot_vel.getZ() );
+
+	/*
 	if( stream_ref_accel_ok ) {
 		goal_accel = stream_reference_acceleration_.data;
 		do_control_accel = true;
@@ -467,28 +492,65 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 		ROS_ERROR_THROTTLE( 2.0, "[Timeout] Setpoint error! Emergency landing!");
 	}
+	*/
 
-	tf2::Transform state_tf;
-	tf2::Vector3 state_vel;
+	//Allows the pathing to be overriden by the tri input
+	if( stream_ref_tri_ok ) {
+		goal_tri = stream_reference_triplet_.data;
+	} else {
+		if(ref_path_.has_reference(te.current_real) && !ref_path_.get_reference(goal_tri, te.current_real, stream_state_odometry_.data.pose.pose) ) {
+			ROS_ERROR_THROTTLE( 2.0, "[Contrail] Have setpoint but unable to generate reference!");
+		}
+	}
 
-	tf2::Vector3 tmp_pos( stream_state_odometry_.data.pose.pose.position.x,
-						  stream_state_odometry_.data.pose.pose.position.y,
-						  stream_state_odometry_.data.pose.pose.position.z );
+	//As long as we have a valid input
+	if( goal_tri.header.stamp > ros::Time(0) ) {
+		if(goal_tri.type_mask & TRIPLET_FULL_TRAJ) {
+			goal_pos.header = goal_tri.header;
 
-	tf2::Quaternion tmp_q( stream_state_odometry_.data.pose.pose.orientation.x,
-						   stream_state_odometry_.data.pose.pose.orientation.y,
-						   stream_state_odometry_.data.pose.pose.orientation.z,
-						   stream_state_odometry_.data.pose.pose.orientation.w );
+			goal_pos.pose.position = goal_tri.position;
+			tf2::Quaternion q(tf2::Vector3(0.0,0.0,1.0),goal_tri.yaw);
+			goal_pos.pose.orientation.w = q.getW();
+			goal_pos.pose.orientation.x = q.getX();
+			goal_pos.pose.orientation.y = q.getY();
+			goal_pos.pose.orientation.z = q.getZ();
 
-	state_tf = tf2::Transform( tmp_q, tmp_pos );
+			l_vel_ref = goal_tri.velocity;
+			//yr_ref = stream_reference_triplet_.data.yaw_rate;
 
-	tf2::Quaternion rot_vel;
-	rot_vel = ( tmp_q * tf2::Quaternion( stream_state_odometry_.data.twist.twist.linear.x,
-									   stream_state_odometry_.data.twist.twist.linear.y,
-									   stream_state_odometry_.data.twist.twist.linear.z,
-									   0.0 ) ) * tmp_q.inverse();
+			do_control_pos = true;
+		} else if(goal_tri.type_mask & TRIPLET_FULL_POS) {
+			goal_pos.header = goal_tri.header;
 
-	state_vel = tf2::Vector3( rot_vel.getX(), rot_vel.getY(), rot_vel.getZ() );
+			goal_pos.pose.position = goal_tri.position;
+			tf2::Quaternion q(tf2::Vector3(0.0,0.0,1.0),goal_tri.yaw);
+			goal_pos.pose.orientation.w = q.getW();
+			goal_pos.pose.orientation.x = q.getX();
+			goal_pos.pose.orientation.y = q.getY();
+			goal_pos.pose.orientation.z = q.getZ();
+
+			do_control_pos = true;
+		} else if(stream_reference_triplet_.data.type_mask & TRIPLET_FULL_VEL) {
+			goal_vel.header = goal_tri.header;
+
+			goal_vel.twist.linear = goal_tri.velocity;
+			goal_vel.twist.angular.z = goal_tri.yaw_rate;
+		} else {
+			ROS_ERROR_THROTTLE(2.0, "[Mavel] Unexpected error handling triplet: triplet had unexpected layout");
+		}
+
+		do_control_vel = true;
+		do_control_accel = true;
+	} else {
+		goal_vel.header.frame_id = param_control_frame_id_;
+		goal_vel.header.stamp = te.current_real;
+		goal_vel.twist.linear.z = param_land_vel_;
+
+		do_control_vel = true;
+		do_control_accel = true;
+
+		ROS_ERROR_THROTTLE( 2.0, "[Timeout] Setpoint error! Emergency landing!");
+	}
 
 	//Position/Trajectory/Path Control
 	if( do_control_pos ) {
@@ -507,7 +569,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 	//Velocity Controller
 	if( do_control_vel ) {
-		goal_accel.header.frame_id = stream_reference_velocity_.data.header.frame_id;
+		goal_accel.header.frame_id = goal_tri.header.frame_id;//stream_reference_velocity_.data.header.frame_id;
 		goal_accel.header.stamp = te.current_real;
 
 		goal_accel.accel.linear.x = controller_vel_x_.step( dt, goal_vel.twist.linear.x, state_vel.getX() );
@@ -635,18 +697,18 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		goal_att.thrust = gThrust.length();
 	} else {
 		//Prevent body z integrator wind-up
-		integrator_body_rate_z_ = 0.0;
+		//integrator_body_rate_z_ = 0.0;
 	}
 
 	//Do orientation control
 	if( do_control_pos ) {
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
 	} else if( do_control_vel ) {
-		goal_att.body_rate.z = stream_reference_velocity_.data.twist.angular.z;
+		goal_att.body_rate.z = goal_tri.yaw_rate;//stream_reference_velocity_.data.twist.angular.z;
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 	} else if ( do_control_accel ) {
-		integrator_body_rate_z_ += dt * stream_reference_acceleration_.data.accel.angular.z;
-		goal_att.body_rate.z = integrator_body_rate_z_;
+		//integrator_body_rate_z_ += dt * stream_reference_acceleration_.data.accel.angular.z;
+		//goal_att.body_rate.z = integrator_body_rate_z_;
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 	}
 
@@ -673,7 +735,7 @@ void Mavel::do_failsafe( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget 
 	controller_vel_x_.reset( 0.0 );
 	controller_vel_y_.reset( 0.0 );
 	controller_vel_z_.reset( 0.0 );
-	integrator_body_rate_z_ = 0.0;
+	//integrator_body_rate_z_ = 0.0;
 
 	goal_att.orientation.w = 1.0;
 	goal_att.orientation.x = 0.0;
