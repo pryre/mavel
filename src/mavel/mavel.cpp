@@ -38,12 +38,12 @@ Mavel::Mavel() :
 	param_got_valid_tri_(false),
 	//integrator_body_rate_z_( 0.0 ),
 	ref_path_(nhp_),
-	controller_pos_x_(&nhp_, "control/pos/x"),
-	controller_pos_y_(&nhp_, "control/pos/y"),
-	controller_pos_z_(&nhp_, "control/pos/z"),
-	controller_vel_x_(&nhp_, "control/vel/x"),
-	controller_vel_y_(&nhp_, "control/vel/y"),
-	controller_vel_z_(&nhp_, "control/vel/z") {
+	controller_pos_x_(ros::NodeHandle(nhp_, "control/pos/x")),
+	controller_pos_y_(ros::NodeHandle(nhp_, "control/pos/y")),
+	controller_pos_z_(ros::NodeHandle(nhp_, "control/pos/z")),
+	controller_vel_x_(ros::NodeHandle(nhp_, "control/vel/x")),
+	controller_vel_y_(ros::NodeHandle(nhp_, "control/vel/y")),
+	controller_vel_z_(ros::NodeHandle(nhp_, "control/vel/z")) {
 
 	nhp_.param( "control_rate", param_rate_control_, 50.0 );
 
