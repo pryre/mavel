@@ -1,3 +1,4 @@
+<?xml version='1.0'?>
 <launch>
 	<node pkg="mavel" type="tf_odom_node" name="tf_odom" clear_params="true" output="screen">
 		<param name="frame_world" value="world" type="str"/>
