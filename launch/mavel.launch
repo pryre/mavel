@@ -2,7 +2,7 @@
 <launch>
 	<node pkg="mavel" type="mavel_node" name="mavel" clear_params="true" output="screen">
 		<!-- Controller Parameters /-->
-		<rosparam command="load" file="$(find mavel)/launch/params.yaml"/>
+		<rosparam command="load" file="$(find mavel)/launch/mavel_params.yaml"/>
 
 		<!-- Interface Topics /-->
 		<remap from="~command/attitude" to="/mavros/setpoint_raw/attitude"/>
