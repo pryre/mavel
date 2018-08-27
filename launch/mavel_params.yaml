@@ -1,5 +1,4 @@
-
-# Common configuration for the mavel position controller 
+# Common configuration for the mavel position controller
 
 # Control
 control_rate: 50.0
