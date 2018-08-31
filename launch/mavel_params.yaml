@@ -1,7 +1,7 @@
 # Common configuration for the mavel position controller
 
 # Control
-control_rate: 50.0
+control_rate: 25.0
 control_frame: "map"
 
 # Path-following options
