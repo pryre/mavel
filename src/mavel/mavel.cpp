@@ -57,7 +57,8 @@ Mavel::Mavel() :
 	nhp_.param( "failsafe_output_on_fatal", param_output_low_on_fatal_, false );
 	nhp_.param( "allow_timeout_position", param_allow_timeout_position_, false );
 
-	nhp_.param( "control_frame", param_control_frame_id_, std::string("world") );
+	nhp_.param( "control_frame", param_control_frame_id_, std::string("map") );
+	ref_path_.set_frame_id(param_control_frame_id_);
 
 	//Data streams
 	nhp_.param( "min_rate/state/odometry", param_stream_min_rate_state_odometry_, 20.0 );
