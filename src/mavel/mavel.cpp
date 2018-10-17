@@ -517,7 +517,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 			goal_pos.pose.orientation.z = q.getZ();
 
 			l_vel_ref = goal_tri.velocity;
-			//yr_ref = stream_reference_triplet_.data.yaw_rate;
+			goal_vel.twist.angular.z = goal_tri.yaw_rate;
 
 			do_control_pos = true;
 		} else if(goal_tri.type_mask & TRIPLET_FULL_POS) {
@@ -529,6 +529,8 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 			goal_pos.pose.orientation.x = q.getX();
 			goal_pos.pose.orientation.y = q.getY();
 			goal_pos.pose.orientation.z = q.getZ();
+
+			goal_vel.twist.angular.z = 0.0;
 
 			do_control_pos = true;
 		} else if(stream_reference_triplet_.data.type_mask & TRIPLET_FULL_VEL) {
@@ -703,6 +705,15 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 	//Do orientation control
 	if( do_control_pos ) {
+		/*
+		//Make sure to add in the rate reference if we have it
+		if(goal_tri.type_mask & TRIPLET_FULL_TRAJ) {
+			goal_att.body_rate.z = goal_tri.yaw_rate;
+			goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
+		} else {
+			goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
+		}
+		*/
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
 	} else if( do_control_vel ) {
 		goal_att.body_rate.z = goal_tri.yaw_rate;//stream_reference_velocity_.data.twist.angular.z;
