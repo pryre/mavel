@@ -53,8 +53,12 @@
 #define TRIPLET_FULL_POS 0b100111111000
 //Full velocity and rate goal
 #define TRIPLET_FULL_VEL 0b010111000111
+//Full acceleration goal (with yaw rate)
+#define TRIPLET_FULL_ACC 0b010000111111
 //Full position and velocity goals
-#define TRIPLET_FULL_TRAJ (TRIPLET_FULL_POS & TRIPLET_FULL_VEL)
+#define TRIPLET_FULL_TRAJ 0b000111000000
+//Full position and velocity goals
+#define TRIPLET_FULL_ATRAJ 0b000000000000
 //Full position and velocity goal, but no rate
 //#define TRIPLET_HALF_TRAJ ( (TRIPLET_FULL_POS & TRIPLET_FULL_VEL) | 0b100000000000 )
 
@@ -109,6 +113,7 @@ class Mavel {
 		bool control_fatal_;
 
 		double param_rate_control_;
+		double param_uav_mass_;
 		double param_tilt_max_;
 		double param_throttle_min_;
 		double param_throttle_mid_;
