@@ -12,6 +12,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/AccelStamped.h>
+#include <geometry_msgs/WrenchStamped.h>
 #include <mavros_msgs/PositionTarget.h>
 
 #include <geometry_msgs/TransformStamped.h>
@@ -25,8 +26,9 @@
 #include <string>
 #include <math.h>
 
-#define SIGMA			0.000001f
-#define MIN_DIST		0.01f
+#define GRAVITY		9.80665f
+#define SIGMA		0.000001f
+#define MIN_DIST	0.01f
 
 Mavel::Mavel() :
 	nh_(),
@@ -95,9 +97,11 @@ Mavel::Mavel() :
 
 	//Publishers
 	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( "command/attitude", 100 );
+	pub_output_wrench_ = nhp_.advertise<geometry_msgs::WrenchStamped>( "feedback/wrench", 100 );
 	pub_output_acceleration_ = nhp_.advertise<geometry_msgs::AccelStamped>( "feedback/accel", 100 );
 	pub_output_velocity_ = nhp_.advertise<geometry_msgs::TwistStamped>( "feedback/twist", 100 );
 	pub_output_position_ = nhp_.advertise<geometry_msgs::PoseStamped>( "feedback/pose", 100 );
+	pub_output_triplet_ = nhp_.advertise<mavros_msgs::PositionTarget>( "feedback/triplet", 100 );
 
 	//Subscribers
 	sub_state_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( "state/odometry", 10, &Mavel::state_odometry_cb, this );
@@ -157,15 +161,16 @@ void Mavel::state_mav_cb( const mavros_msgs::State msg_in ) {
 void Mavel::reference_triplet_cb( const mavros_msgs::PositionTarget msg_in ) {
 	//Check to make sure we're in the right reference frame
 	if(msg_in.coordinate_frame == msg_in.FRAME_LOCAL_NED) {
-		if( (msg_in.type_mask == TRIPLET_FULL_POS) ||
-			(msg_in.type_mask == TRIPLET_FULL_VEL) ||
-			(msg_in.type_mask == TRIPLET_FULL_TRAJ) ||
-			(msg_in.type_mask == TRIPLET_FULL_ATRAJ) ) {
+		if( (msg_in.type_mask == TRIPLET_SETP_POS) ||
+			(msg_in.type_mask == TRIPLET_SETP_VEL) ||
+			(msg_in.type_mask == TRIPLET_SETP_ACC) ||
+			(msg_in.type_mask == TRIPLET_TRAJ_PVEL) ||
+			(msg_in.type_mask == TRIPLET_TRAJ_FULL) ) {
 
 			stream_update( stream_reference_triplet_, &msg_in );
 
 			if( (msg_in.header.stamp > ros::Time(0)) &&
-				( (msg_in.type_mask == TRIPLET_FULL_POS) || (msg_in.type_mask == TRIPLET_FULL_TRAJ) || (msg_in.type_mask == TRIPLET_FULL_ATRAJ) ) ) {
+				( (msg_in.type_mask == TRIPLET_SETP_POS) || (msg_in.type_mask == TRIPLET_TRAJ_PVEL) || (msg_in.type_mask == TRIPLET_TRAJ_FULL) ) ) {
 
 				if(param_allow_timeout_position_ && !param_got_valid_tri_) {
 					ROS_INFO("Mavel stream fallback initialized on: %s", stream_reference_triplet_.stream_topic.c_str() );
@@ -338,9 +343,6 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	bool do_control_accel = false;
 
 	mavros_msgs::PositionTarget goal_tri;
-	geometry_msgs::PoseStamped goal_pos;
-	geometry_msgs::TwistStamped goal_vel;
-	geometry_msgs::AccelStamped goal_accel;
 
 	double dt = (te.current_real - te.last_real).toSec();
 
@@ -355,15 +357,33 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	//bool stream_ref_vel_ok = stream_check( stream_reference_velocity_, te.current_real ) == HEALTH_OK;
 	//bool stream_ref_accel_ok = stream_check( stream_reference_acceleration_, te.current_real ) == HEALTH_OK;
 
+	geometry_msgs::Point l_pos_ref;
+	l_pos_ref.x = 0.0;
+	l_pos_ref.y = 0.0;
+	l_pos_ref.z = 0.0;
+
+	geometry_msgs::Quaternion q_rot_ref;
+	q_rot_ref.w = 1.0;
+	q_rot_ref.x = 0.0;
+	q_rot_ref.y = 0.0;
+	q_rot_ref.z = 0.0;
+
 	geometry_msgs::Vector3 l_vel_ref;
 	l_vel_ref.x = 0.0;
 	l_vel_ref.y = 0.0;
 	l_vel_ref.z = 0.0;
 
+	double r_rot_ref = 0.0;
+
 	geometry_msgs::Vector3 l_acc_ref;
 	l_acc_ref.x = 0.0;
 	l_acc_ref.y = 0.0;
 	l_acc_ref.z = 0.0;
+
+	geometry_msgs::Vector3 thrust_ref;
+	thrust_ref.x = 0.0;
+	thrust_ref.y = 0.0;
+	thrust_ref.z = 0.0;
 
 	tf2::Transform state_tf;
 	tf2::Vector3 state_vel;
@@ -514,64 +534,75 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 	//As long as we have a valid input
 	if( goal_tri.header.stamp > ros::Time(0) ) {
-		if(goal_tri.type_mask == TRIPLET_FULL_ATRAJ) {
-			goal_pos.header = goal_tri.header;
-
-			goal_pos.pose.position = goal_tri.position;
+		if(goal_tri.type_mask == TRIPLET_TRAJ_FULL) {
+			l_pos_ref = goal_tri.position;
 			tf2::Quaternion q(tf2::Vector3(0.0,0.0,1.0),goal_tri.yaw);
-			goal_pos.pose.orientation.w = q.getW();
-			goal_pos.pose.orientation.x = q.getX();
-			goal_pos.pose.orientation.y = q.getY();
-			goal_pos.pose.orientation.z = q.getZ();
+			q_rot_ref.w = q.getW();
+			q_rot_ref.x = q.getX();
+			q_rot_ref.y = q.getY();
+			q_rot_ref.z = q.getZ();
 
 			l_vel_ref = goal_tri.velocity;
-			goal_vel.twist.angular.z = goal_tri.yaw_rate;
+			r_rot_ref = goal_tri.yaw_rate;
 
 			l_acc_ref = goal_tri.acceleration_or_force;
 
 			do_control_pos = true;
-		} else if(goal_tri.type_mask == TRIPLET_FULL_TRAJ) {
-			goal_pos.header = goal_tri.header;
-
-			goal_pos.pose.position = goal_tri.position;
+			do_control_vel = true;
+			do_control_accel = true;
+		} else if(goal_tri.type_mask == TRIPLET_TRAJ_PVEL) {
+			l_pos_ref = goal_tri.position;
 			tf2::Quaternion q(tf2::Vector3(0.0,0.0,1.0),goal_tri.yaw);
-			goal_pos.pose.orientation.w = q.getW();
-			goal_pos.pose.orientation.x = q.getX();
-			goal_pos.pose.orientation.y = q.getY();
-			goal_pos.pose.orientation.z = q.getZ();
+			q_rot_ref.w = q.getW();
+			q_rot_ref.x = q.getX();
+			q_rot_ref.y = q.getY();
+			q_rot_ref.z = q.getZ();
 
 			l_vel_ref = goal_tri.velocity;
-			goal_vel.twist.angular.z = goal_tri.yaw_rate;
+			r_rot_ref = goal_tri.yaw_rate;
 
 			do_control_pos = true;
-		} else if(goal_tri.type_mask == TRIPLET_FULL_POS) {
-			goal_pos.header = goal_tri.header;
-
-			goal_pos.pose.position = goal_tri.position;
+			do_control_vel = true;
+			do_control_accel = true;
+		} else if(goal_tri.type_mask == TRIPLET_SETP_POS) {
+			l_pos_ref = goal_tri.position;
 			tf2::Quaternion q(tf2::Vector3(0.0,0.0,1.0),goal_tri.yaw);
-			goal_pos.pose.orientation.w = q.getW();
-			goal_pos.pose.orientation.x = q.getX();
-			goal_pos.pose.orientation.y = q.getY();
-			goal_pos.pose.orientation.z = q.getZ();
-
-			goal_vel.twist.angular.z = 0.0;
+			q_rot_ref.w = q.getW();
+			q_rot_ref.x = q.getX();
+			q_rot_ref.y = q.getY();
+			q_rot_ref.z = q.getZ();
 
 			do_control_pos = true;
-		} else if(stream_reference_triplet_.data.type_mask == TRIPLET_FULL_VEL) {
-			goal_vel.header = goal_tri.header;
+			do_control_vel = true;
+			do_control_accel = true;
+		} else if(stream_reference_triplet_.data.type_mask == TRIPLET_SETP_VEL) {
+			l_vel_ref = goal_tri.velocity;
+			r_rot_ref = goal_tri.yaw_rate;
 
-			goal_vel.twist.linear = goal_tri.velocity;
-			goal_vel.twist.angular.z = goal_tri.yaw_rate;
+			do_control_vel = true;
+			do_control_accel = true;
+		} else if(stream_reference_triplet_.data.type_mask == TRIPLET_SETP_ACC) {
+			l_acc_ref = goal_tri.acceleration_or_force;
+			r_rot_ref = goal_tri.yaw_rate;
+
+			do_control_accel = true;
 		} else {
 			ROS_ERROR_THROTTLE(2.0, "[Mavel] Unexpected error handling triplet: triplet had unexpected layout");
 		}
+	}
 
-		do_control_vel = true;
-		do_control_accel = true;
-	} else {
-		goal_vel.header.frame_id = param_control_frame_id_;
-		goal_vel.header.stamp = te.current_real;
-		goal_vel.twist.linear.z = param_land_vel_;
+	//If we have no form of control input
+	if(!do_control_accel) {
+		goal_tri.header.frame_id = param_control_frame_id_;
+		goal_tri.header.stamp = te.current_real;
+		goal_tri.type_mask = TRIPLET_SETP_VEL;
+		goal_tri.velocity.x = 0.0;
+		goal_tri.velocity.y = 0.0;
+		goal_tri.velocity.z = param_land_vel_;
+		goal_tri.yaw_rate = 0.0;
+
+		l_vel_ref = goal_tri.velocity;
+		r_rot_ref = goal_tri.yaw_rate;
 
 		do_control_vel = true;
 		do_control_accel = true;
@@ -581,12 +612,9 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 	//Position/Trajectory/Path Control
 	if( do_control_pos ) {
-		goal_vel.header.frame_id = param_control_frame_id_;
-		goal_vel.header.stamp = te.current_real;
-
-		goal_vel.twist.linear.x = l_vel_ref.x + controller_pos_x_.step( dt, goal_pos.pose.position.x, state_tf.getOrigin().getX() );
-		goal_vel.twist.linear.y = l_vel_ref.y + controller_pos_y_.step( dt, goal_pos.pose.position.y, state_tf.getOrigin().getY() );
-		goal_vel.twist.linear.z = l_vel_ref.z + controller_pos_z_.step( dt, goal_pos.pose.position.z, state_tf.getOrigin().getZ() );
+		l_vel_ref.x += controller_pos_x_.step( dt, l_pos_ref.x, state_tf.getOrigin().getX() );
+		l_vel_ref.y += controller_pos_y_.step( dt, l_pos_ref.y, state_tf.getOrigin().getY() );
+		l_vel_ref.z += controller_pos_z_.step( dt, l_pos_ref.z, state_tf.getOrigin().getZ() );
 	} else {
 		//Prevent PID wind-up
 		controller_pos_x_.reset( state_tf.getOrigin().getX() );
@@ -596,12 +624,9 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 	//Velocity Controller
 	if( do_control_vel ) {
-		goal_accel.header.frame_id = goal_tri.header.frame_id;//stream_reference_velocity_.data.header.frame_id;
-		goal_accel.header.stamp = te.current_real;
-
-		goal_accel.accel.linear.x = l_acc_ref.x + controller_vel_x_.step( dt, goal_vel.twist.linear.x, state_vel.getX() );
-		goal_accel.accel.linear.y = l_acc_ref.y + controller_vel_y_.step( dt, goal_vel.twist.linear.y, state_vel.getY() );
-		goal_accel.accel.linear.z = l_acc_ref.z + controller_vel_z_.step( dt, goal_vel.twist.linear.z, state_vel.getZ() );
+		thrust_ref.x += controller_vel_x_.step( dt, l_vel_ref.x, state_vel.getX() );
+		thrust_ref.y += controller_vel_y_.step( dt, l_vel_ref.y, state_vel.getY() );
+		thrust_ref.z += controller_vel_z_.step( dt, l_vel_ref.z, state_vel.getZ() );
 	} else {
 		//Prevent PID wind-up
 		controller_vel_x_.reset( state_vel.getX() );
@@ -609,14 +634,21 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		controller_vel_z_.reset( state_vel.getZ() );
 	}
 
+	double Tx = 0.0;
+	double Ty = 0.0;
+	double Tz = 0.0;
+	double est_force_max = 0.0;
+
 	if( do_control_accel ) {
-		//F=ma
-		double Fm = param_uav_mass_ / param_throttle_mid_; //Force max of motors
+		double est_throttle_hover = param_throttle_mid_ + controller_vel_z_.getOutputIterm();
+		double est_force_hover = param_uav_mass_ * GRAVITY;
+		est_force_max = est_force_hover / est_throttle_hover;
+		double est_accel_max = est_force_max / param_uav_mass_;
 
 		//Calculate goal accelerations
-		double Tx = (param_uav_mass_ * goal_accel.accel.linear.x) / Fm;
-		double Ty = (param_uav_mass_ * goal_accel.accel.linear.y) / Fm;
-		double Tz = (param_uav_mass_ * goal_accel.accel.linear.z) / Fm + param_throttle_mid_;
+		Tx = thrust_ref.x + (param_uav_mass_ * (l_acc_ref.x / est_accel_max) );
+		Ty = thrust_ref.y + (param_uav_mass_ * (l_acc_ref.y / est_accel_max) );
+		Tz = thrust_ref.z + (param_uav_mass_ * (l_acc_ref.z / est_accel_max) ) + param_throttle_mid_;
 
 		//Thrust Calculation
 		tf2::Vector3 gThrust(Tx, Ty, Tz);
@@ -675,10 +707,10 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		double roll_c, pitch_c, yaw_c;
 
 		if( do_control_pos ) {
-			tf2::Quaternion q_c( goal_pos.pose.orientation.x,
-								 goal_pos.pose.orientation.y,
-								 goal_pos.pose.orientation.z,
-								 goal_pos.pose.orientation.w );
+			tf2::Quaternion q_c( q_rot_ref.x,
+								 q_rot_ref.y,
+								 q_rot_ref.z,
+								 q_rot_ref.w );
 
 			tf2::Matrix3x3( q_c ).getRPY( roll_c, pitch_c, yaw_c );
 		}
@@ -743,11 +775,12 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		*/
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
 	} else if( do_control_vel ) {
-		goal_att.body_rate.z = goal_tri.yaw_rate;//stream_reference_velocity_.data.twist.angular.z;
+		goal_att.body_rate.z = r_rot_ref;//stream_reference_velocity_.data.twist.angular.z;
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 	} else if ( do_control_accel ) {
 		//integrator_body_rate_z_ += dt * stream_reference_acceleration_.data.accel.angular.z;
 		//goal_att.body_rate.z = integrator_body_rate_z_;
+		goal_att.body_rate.z = r_rot_ref;
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE;
 	}
 
@@ -755,15 +788,53 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	if( goal_att.thrust < param_throttle_min_ )
 		goal_att.thrust = param_throttle_min_;
 
+
 	//Handle the control feedback
-	if( do_control_accel )
-		pub_output_acceleration_.publish( goal_accel );
+	if(do_control_accel) {
+		geometry_msgs::WrenchStamped goal_wrench;
 
-	if( do_control_vel )
+		goal_wrench.header = goal_tri.header;
+		goal_wrench.wrench.force.x = Tx * est_force_max;
+		goal_wrench.wrench.force.y = Ty * est_force_max;
+		goal_wrench.wrench.force.z = Tz * est_force_max;
+
+		pub_output_wrench_.publish( goal_wrench );
+		pub_output_triplet_.publish( goal_tri );
+	}
+
+	if( do_control_accel ) {
+		geometry_msgs::AccelStamped goal_acc;
+
+		goal_acc.header = goal_tri.header;
+		goal_acc.accel.linear = l_acc_ref;
+		goal_acc.accel.angular.x = 0.0;
+		goal_acc.accel.angular.y = 0.0;
+		goal_acc.accel.angular.z = 0.0;
+
+		pub_output_acceleration_.publish( goal_acc );
+	}
+
+	if( do_control_vel ) {
+		geometry_msgs::TwistStamped goal_vel;
+
+		goal_vel.header = goal_tri.header;
+		goal_vel.twist.linear = l_vel_ref;
+		goal_vel.twist.angular.x = 0.0;
+		goal_vel.twist.angular.y = 0.0;
+		goal_vel.twist.angular.z = r_rot_ref;
+
 		pub_output_velocity_.publish( goal_vel );
+	}
 
-	if( do_control_pos )
+	if( do_control_pos ) {
+		geometry_msgs::PoseStamped goal_pos;
+
+		goal_pos.header = goal_tri.header;
+		goal_pos.pose.position = l_pos_ref;
+		goal_pos.pose.orientation = q_rot_ref;
+
 		pub_output_position_.publish( goal_pos );
+	}
 }
 
 void Mavel::do_failsafe( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &goal_att ) {

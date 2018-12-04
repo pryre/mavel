@@ -50,15 +50,15 @@
 
 //Setup some defines to make handling triplet stream easier
 //Full position and yaw goal
-#define TRIPLET_FULL_POS 0b100111111000
+#define TRIPLET_SETP_POS 0b100111111000
 //Full velocity and rate goal
-#define TRIPLET_FULL_VEL 0b010111000111
+#define TRIPLET_SETP_VEL 0b010111000111
 //Full acceleration goal (with yaw rate)
-#define TRIPLET_FULL_ACC 0b010000111111
+#define TRIPLET_SETP_ACC 0b010000111111
 //Full position and velocity goals
-#define TRIPLET_FULL_TRAJ 0b000111000000
+#define TRIPLET_TRAJ_PVEL 0b000111000000
 //Full position and velocity goals
-#define TRIPLET_FULL_ATRAJ 0b000000000000
+#define TRIPLET_TRAJ_FULL 0b000000000000
 //Full position and velocity goal, but no rate
 //#define TRIPLET_HALF_TRAJ ( (TRIPLET_FULL_POS & TRIPLET_FULL_VEL) | 0b100000000000 )
 
@@ -95,9 +95,11 @@ class Mavel {
 		ros::NodeHandle nh_;
 		ros::NodeHandle nhp_;
 
+		ros::Publisher pub_output_triplet_;
 		ros::Publisher pub_output_position_;
 		ros::Publisher pub_output_velocity_;
 		ros::Publisher pub_output_acceleration_;
+		ros::Publisher pub_output_wrench_;
 		ros::Publisher pub_output_attitude_;
 
 		ros::Subscriber sub_state_mav_;
