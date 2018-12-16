@@ -634,25 +634,34 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		controller_vel_z_.reset( state_vel.getZ() );
 	}
 
-	double Tx = 0.0;
-	double Ty = 0.0;
-	double Tz = 0.0;
+	tf2::Vector3 T(0.0, 0.0, 0.0);
 	double est_force_max = 0.0;
 
 	if( do_control_accel ) {
-		double est_throttle_hover = param_throttle_mid_ + controller_vel_z_.getOutputIterm();
-		double est_force_hover = param_uav_mass_ * GRAVITY;
-		est_force_max = est_force_hover / est_throttle_hover;
-		double est_accel_max = est_force_max / param_uav_mass_;
+		tf2::Vector3 l_acc_add(0.0, 0.0, 0.0);
+
+		if(param_uav_mass_ > 0.0) {
+			double est_throttle_hover = param_throttle_mid_ + controller_vel_z_.getOutputIterm();
+			double est_force_hover = param_uav_mass_ * GRAVITY;
+			est_force_max = est_force_hover / est_throttle_hover;
+			double est_accel_max = est_force_max / param_uav_mass_;
+
+			l_acc_add.setX(param_uav_mass_ * (l_acc_ref.x / est_accel_max) );
+			l_acc_add.setY(param_uav_mass_ * (l_acc_ref.y / est_accel_max) );
+			l_acc_add.setZ(param_uav_mass_ * (l_acc_ref.z / est_accel_max) );
+		} else {
+			ROS_WARN_ONCE("[Mavel] Paremter mass <= 0, not using acceleration reference");
+		}
 
 		//Calculate goal accelerations
-		Tx = thrust_ref.x + (param_uav_mass_ * (l_acc_ref.x / est_accel_max) );
-		Ty = thrust_ref.y + (param_uav_mass_ * (l_acc_ref.y / est_accel_max) );
-		Tz = thrust_ref.z + (param_uav_mass_ * (l_acc_ref.z / est_accel_max) ) + param_throttle_mid_;
+		T.setX(thrust_ref.x);
+		T.setY(thrust_ref.y);
+		T.setZ(thrust_ref.z + param_throttle_mid_);
+		T += l_acc_add;
 
 		//Thrust Calculation
-		tf2::Vector3 gThrust(Tx, Ty, Tz);
-		tf2::Vector3 xyThrust(Tx, Ty, 0.0);
+		tf2::Vector3 gThrust = T;
+		tf2::Vector3 xyThrust(T.getX(), T.getX(), 0.0);
 		tf2::Quaternion goalThrustRotation(0.0, 0.0, 0.0, 1.0);
 
 		//If xy thrust vector length greater than 0.01
@@ -794,9 +803,9 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		geometry_msgs::WrenchStamped goal_wrench;
 
 		goal_wrench.header = goal_tri.header;
-		goal_wrench.wrench.force.x = Tx * est_force_max;
-		goal_wrench.wrench.force.y = Ty * est_force_max;
-		goal_wrench.wrench.force.z = Tz * est_force_max;
+		goal_wrench.wrench.force.x = T.getX() * est_force_max;
+		goal_wrench.wrench.force.y = T.getY() * est_force_max;
+		goal_wrench.wrench.force.z = T.getZ() * est_force_max;
 
 		pub_output_wrench_.publish( goal_wrench );
 		pub_output_triplet_.publish( goal_tri );
