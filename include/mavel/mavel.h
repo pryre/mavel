@@ -99,7 +99,7 @@ class Mavel {
 		ros::Publisher pub_output_position_;
 		ros::Publisher pub_output_velocity_;
 		ros::Publisher pub_output_acceleration_;
-		ros::Publisher pub_output_wrench_;
+		///ros::Publisher pub_output_wrench_;	//XXX: Currently unused
 		ros::Publisher pub_output_attitude_;
 
 		ros::Subscriber sub_state_mav_;
@@ -115,7 +115,7 @@ class Mavel {
 		bool control_fatal_;
 
 		double param_rate_control_;
-		double param_uav_mass_;
+		//double param_uav_mass_;	//XXX: Currently unused
 		double param_tilt_max_;
 		double param_throttle_min_;
 		double param_throttle_mid_;

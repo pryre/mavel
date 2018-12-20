@@ -49,7 +49,8 @@ Mavel::Mavel() :
 
 	nhp_.param( "control_rate", param_rate_control_, 50.0 );
 
-	nhp_.param( "uav_mass", param_uav_mass_, 0.0 );
+	//nhp_.param( "uav_mass", param_uav_mass_, 0.0 );
+	//ROS_ASSERT_MSG(param_uav_mass_ > 0.0, "Error: uav_mass is invalid (<0.0)!");
 
 	nhp_.param( "tilt_max", param_tilt_max_, 0.39 );
 
@@ -97,7 +98,7 @@ Mavel::Mavel() :
 
 	//Publishers
 	pub_output_attitude_ = nhp_.advertise<mavros_msgs::AttitudeTarget>( "command/attitude", 100 );
-	pub_output_wrench_ = nhp_.advertise<geometry_msgs::WrenchStamped>( "feedback/wrench", 100 );
+	//pub_output_wrench_ = nhp_.advertise<geometry_msgs::WrenchStamped>( "feedback/wrench", 100 ); 	//XXX: Currently unused
 	pub_output_acceleration_ = nhp_.advertise<geometry_msgs::AccelStamped>( "feedback/accel", 100 );
 	pub_output_velocity_ = nhp_.advertise<geometry_msgs::TwistStamped>( "feedback/twist", 100 );
 	pub_output_position_ = nhp_.advertise<geometry_msgs::PoseStamped>( "feedback/pose", 100 );
@@ -624,9 +625,9 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 	//Velocity Controller
 	if( do_control_vel ) {
-		thrust_ref.x += controller_vel_x_.step( dt, l_vel_ref.x, state_vel.getX() );
-		thrust_ref.y += controller_vel_y_.step( dt, l_vel_ref.y, state_vel.getY() );
-		thrust_ref.z += controller_vel_z_.step( dt, l_vel_ref.z, state_vel.getZ() );
+		l_acc_ref.x += controller_vel_x_.step( dt, l_vel_ref.x, state_vel.getX() );
+		l_acc_ref.y += controller_vel_y_.step( dt, l_vel_ref.y, state_vel.getY() );
+		l_acc_ref.z += controller_vel_z_.step( dt, l_vel_ref.z, state_vel.getZ() );
 	} else {
 		//Prevent PID wind-up
 		controller_vel_x_.reset( state_vel.getX() );
@@ -634,65 +635,54 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		controller_vel_z_.reset( state_vel.getZ() );
 	}
 
-	tf2::Vector3 T(0.0, 0.0, 0.0);
-	double est_force_max = 0.0;
+	tf2::Vector3 a(l_acc_ref.x, l_acc_ref.y, l_acc_ref.z + GRAVITY);
+	tf2::Vector3 T(0.0,0.0,0.0);
 
 	if( do_control_accel ) {
-		tf2::Vector3 l_acc_add(0.0, 0.0, 0.0);
+		//XXX:	The use of param_uav_mass_ is a bit redundant, but it allows
+		//		for a nicer use of the vel->accel->norm_thrust chain, and
+		//		provides us with better feedback throughout the rest of the
+		//		control process.
+		/*
+		double est_force_max = (param_uav_mass_ * GRAVITY ) / param_throttle_mid_;
+		T = (param_uav_mass_ * a);
 
-		if(param_uav_mass_ > 0.0) {
-			double est_throttle_hover = param_throttle_mid_ + controller_vel_z_.getOutputIterm();
-			double est_force_hover = param_uav_mass_ * GRAVITY;
-			est_force_max = est_force_hover / est_throttle_hover;
-			double est_accel_max = est_force_max / param_uav_mass_;
-
-			l_acc_add.setX(param_uav_mass_ * (l_acc_ref.x / est_accel_max) );
-			l_acc_add.setY(param_uav_mass_ * (l_acc_ref.y / est_accel_max) );
-			l_acc_add.setZ(param_uav_mass_ * (l_acc_ref.z / est_accel_max) );
-		} else {
-			ROS_WARN_ONCE("[Mavel] Paremter mass <= 0, not using acceleration reference");
-		}
-
-		//Calculate goal accelerations
-		T.setX(thrust_ref.x);
-		T.setY(thrust_ref.y);
-		T.setZ(thrust_ref.z + param_throttle_mid_);
-		T += l_acc_add;
-
+		tf2::Vector3 nThrust = T / est_force_max;
+		*/
 		//Thrust Calculation
-		tf2::Vector3 gThrust = T;
-		tf2::Vector3 xyThrust(T.getX(), T.getX(), 0.0);
+		tf2::Vector3 nThrust = param_throttle_mid_ * ( a /  GRAVITY );
+		tf2::Vector3 xyThrust(nThrust.getX(), nThrust.getY(), 0.0);
 		tf2::Quaternion goalThrustRotation(0.0, 0.0, 0.0, 1.0);
 
 		//If xy thrust vector length greater than 0.01
 		if( xyThrust.length() > MIN_DIST ) {
 			//Limit horizontal thrust by z thrust
-			double thrust_xy_max = gThrust.getZ() * std::tan( param_tilt_max_ );
+			double thrust_xy_max = nThrust.getZ() * std::tan( param_tilt_max_ );
 
 			//If thrust_sp_xy_len > thrust_xy_max
 			if( xyThrust.length() > thrust_xy_max ) {
 				//Scale the XY thrust setpoint down
 				double k = thrust_xy_max / xyThrust.length();
-				gThrust.setX( k*gThrust.getX() );
-				gThrust.setY( k*gThrust.getY() );
-				xyThrust.setX( gThrust.getX() );
-				xyThrust.setY( gThrust.getY() );
+				nThrust.setX( k*nThrust.getX() );
+				nThrust.setY( k*nThrust.getY() );
+				xyThrust.setX( nThrust.getX() );
+				xyThrust.setY( nThrust.getY() );
 			}
 		}
 
 		//If thrust_abs > thr_max
-		if( gThrust.length() > param_throttle_max_ ) {
+		if( nThrust.length() > param_throttle_max_ ) {
 			//If thrust_z larger than thr_max, limit throttle, set xy to 0
-			if( gThrust.getZ() > param_throttle_max_ ) {
-				gThrust.setX( 0.0 );
-				gThrust.setY( 0.0 );
-				gThrust.setZ( param_throttle_max_ );
+			if( nThrust.getZ() > param_throttle_max_ ) {
+				nThrust.setX( 0.0 );
+				nThrust.setY( 0.0 );
+				nThrust.setZ( param_throttle_max_ );
 				ROS_WARN_THROTTLE( 1.0, "Too much thrust, scaling Z" );
 			} else { //The XY thrust is the cause of the over-thrust, so scale down
-				double thrust_xy_max = sqrtf( ( param_throttle_max_ * param_throttle_max_ ) - ( gThrust.getZ() * gThrust.getZ() ) );
+				double thrust_xy_max = sqrtf( ( param_throttle_max_ * param_throttle_max_ ) - ( nThrust.getZ() * nThrust.getZ() ) );
 				double k = thrust_xy_max / xyThrust.length();
-				gThrust.setX( k * gThrust.getX() );
-				gThrust.setY( k * gThrust.getY() );
+				nThrust.setX( k * nThrust.getX() );
+				nThrust.setY( k * nThrust.getY() );
 
 				ROS_WARN_THROTTLE( 1.0, "Too much thrust, scaling XY" );
 			}
@@ -704,9 +694,9 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		tf2::Vector3 thrust_z;
 
 		//thrust_abs > SIGMA
-		if( gThrust.length() > SIGMA ) {
+		if( nThrust.length() > SIGMA ) {
 			//Get the direction of the thrust vector (and rotate to the body frame)
-			thrust_z = gThrust.normalized();
+			thrust_z = nThrust.normalized();
 		} else {
 			//No thrust commanded, align with straight up
 			thrust_z.setZ( 1.0 );
@@ -765,7 +755,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		goal_att.orientation.y = goalThrustRotation.getY();
 		goal_att.orientation.z = goalThrustRotation.getZ();
 
-		goal_att.thrust = gThrust.length();
+		goal_att.thrust = nThrust.length();
 	} else {
 		//Prevent body z integrator wind-up
 		//integrator_body_rate_z_ = 0.0;
@@ -800,14 +790,18 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 	//Handle the control feedback
 	if(do_control_accel) {
+		/* XXX: Could be used if UAV mass is known
 		geometry_msgs::WrenchStamped goal_wrench;
 
 		goal_wrench.header = goal_tri.header;
-		goal_wrench.wrench.force.x = T.getX() * est_force_max;
-		goal_wrench.wrench.force.y = T.getY() * est_force_max;
-		goal_wrench.wrench.force.z = T.getZ() * est_force_max;
+		goal_wrench.header.stamp = te.current_real;
+		goal_wrench.wrench.force.x = T.getX();
+		goal_wrench.wrench.force.y = T.getY();
+		goal_wrench.wrench.force.z = T.getZ();
 
 		pub_output_wrench_.publish( goal_wrench );
+		*/
+
 		pub_output_triplet_.publish( goal_tri );
 	}
 
@@ -815,6 +809,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		geometry_msgs::AccelStamped goal_acc;
 
 		goal_acc.header = goal_tri.header;
+		goal_acc.header.stamp = te.current_real;
 		goal_acc.accel.linear = l_acc_ref;
 		goal_acc.accel.angular.x = 0.0;
 		goal_acc.accel.angular.y = 0.0;
@@ -827,6 +822,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		geometry_msgs::TwistStamped goal_vel;
 
 		goal_vel.header = goal_tri.header;
+		goal_vel.header.stamp = te.current_real;
 		goal_vel.twist.linear = l_vel_ref;
 		goal_vel.twist.angular.x = 0.0;
 		goal_vel.twist.angular.y = 0.0;
@@ -839,6 +835,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		geometry_msgs::PoseStamped goal_pos;
 
 		goal_pos.header = goal_tri.header;
+		goal_pos.header.stamp = te.current_real;
 		goal_pos.pose.position = l_pos_ref;
 		goal_pos.pose.orientation = q_rot_ref;
 
