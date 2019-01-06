@@ -772,6 +772,12 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 			goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
 		}
 		*/
+
+		//Make sure to add in the rate reference if we have it
+		if( (goal_tri.type_mask == TRIPLET_TRAJ_FULL) || (goal_tri.type_mask == TRIPLET_TRAJ_PVEL) )
+			goal_att.body_rate.z = goal_tri.yaw_rate;
+
+		//Still need to flag that we don't want to override anything
 		goal_att.type_mask |= goal_att.IGNORE_ROLL_RATE | goal_att.IGNORE_PITCH_RATE | goal_att.IGNORE_YAW_RATE;
 	} else if( do_control_vel ) {
 		goal_att.body_rate.z = r_rot_ref;//stream_reference_velocity_.data.twist.angular.z;
