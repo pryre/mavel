@@ -62,6 +62,10 @@
 //Full position and velocity goal, but no rate
 //#define TRIPLET_HALF_TRAJ ( (TRIPLET_FULL_POS & TRIPLET_FULL_VEL) | 0b100000000000 )
 
+#define GRAVITY		9.80665f
+#define SIGMA		0.000001f
+#define MIN_DIST	0.01f
+
 enum mavel_data_stream_states {
 	HEALTH_OK = 0,
 	HEALTH_TIMEOUT,
@@ -105,10 +109,6 @@ class Mavel {
 		ros::Subscriber sub_state_mav_;
 		ros::Subscriber sub_state_odometry_;
 		ros::Subscriber sub_reference_triplet_;
-		//ros::Subscriber sub_reference_trajectory_;
-		//ros::Subscriber sub_reference_position_;
-		//ros::Subscriber sub_reference_velocity_;
-		//ros::Subscriber sub_reference_acceleration_;
 
 		ros::Timer timer_controller_;
 		bool control_started_;
@@ -124,8 +124,6 @@ class Mavel {
 		bool param_output_low_on_fatal_;
 
 		bool param_allow_timeout_position_;
-		//bool param_got_valid_pos_;
-		//bool param_got_valid_traj_;
 		bool param_got_valid_tri_;
 
 		//Rate in Hz
@@ -133,18 +131,10 @@ class Mavel {
 		double param_stream_min_rate_state_odometry_;
 		double param_stream_min_rate_state_mav_;
 		double param_stream_min_rate_reference_triplet_;
-		//double param_stream_min_rate_reference_trajectory_;
-		//double param_stream_min_rate_reference_position_;
-		//double param_stream_min_rate_reference_velocity_;
-		//double param_stream_min_rate_reference_acceleration_;
 
 		mavel_data_stream<nav_msgs::Odometry> stream_state_odometry_;
 		mavel_data_stream<mavros_msgs::State> stream_state_mav_;
 		mavel_data_stream<mavros_msgs::PositionTarget> stream_reference_triplet_;
-		//mavel_data_stream<nav_msgs::Odometry> stream_reference_trajectory_;
-		//mavel_data_stream<geometry_msgs::PoseStamped> stream_reference_position_;
-		//mavel_data_stream<geometry_msgs::TwistStamped> stream_reference_velocity_;
-		//mavel_data_stream<geometry_msgs::AccelStamped> stream_reference_acceleration_;
 
 		ContrailManager ref_path_;
 		pidController controller_pos_x_;
@@ -153,8 +143,6 @@ class Mavel {
 		pidController controller_vel_x_;
 		pidController controller_vel_y_;
 		pidController controller_vel_z_;
-
-		//double integrator_body_rate_z_;
 
 		std::string param_control_frame_id_;
 
@@ -170,10 +158,6 @@ class Mavel {
 		void state_mav_cb( const mavros_msgs::State msg_in );
 
 		void reference_triplet_cb( const mavros_msgs::PositionTarget msg_in );
-		//void reference_trajectory_cb( const nav_msgs::Odometry msg_in );
-		//void reference_position_cb( const geometry_msgs::PoseStamped msg_in );
-		//void reference_velocity_cb( const geometry_msgs::TwistStamped msg_in );
-		//void reference_acceleration_cb( const geometry_msgs::AccelStamped msg_in );
 
 		//Handles the controller loop
 		void controller_cb( const ros::TimerEvent& timerCallback );
