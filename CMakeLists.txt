@@ -8,7 +8,8 @@ find_package(catkin REQUIRED COMPONENTS
   pid_controller_lib
   contrail
   geometry_msgs
-  sensor_msgs
+  tf2_geometry_msgs
+  nav_msgs
   roscpp
   tf2
   tf2_ros
