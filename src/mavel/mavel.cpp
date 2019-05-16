@@ -32,6 +32,7 @@ Mavel::Mavel() :
 	control_started_(false),
 	control_fatal_(false),
 	param_got_valid_tri_(false),
+	param_allow_controller_reset_(false),
 	ref_path_(nhp_),
 	controller_pos_x_(ros::NodeHandle(nhp_, "control/pos/x")),
 	controller_pos_y_(ros::NodeHandle(nhp_, "control/pos/y")),
@@ -54,6 +55,7 @@ Mavel::Mavel() :
 	nhp_.param( "failsafe_land_vel", param_land_vel_, -0.2 );
 	nhp_.param( "failsafe_output_on_fatal", param_output_low_on_fatal_, false );
 	nhp_.param( "allow_timeout_position", param_allow_timeout_position_, false );
+	nhp_.param( "allow_controller_reset", param_allow_controller_reset_, false );
 
 	nhp_.param( "control_frame", param_control_frame_id_, std::string("map") );
 	ref_path_.set_frame_id(param_control_frame_id_);
@@ -233,28 +235,46 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 	mavros_msgs::AttitudeTarget msg_out;
 	msg_out.orientation.w = 1.0;	//Just to make sure the quaternion is initialized correctly
 
-	if( !control_fatal_ ) {
-		if( !control_started_ ) {
-			if( state_ok && reference_ok ) {
-				ROS_INFO_THROTTLE( 2.0, "Mavel ready, waiting for mav to be armed");
+	if( !control_started_ ) {
+		if( state_ok && reference_ok ) {
+			ROS_INFO_THROTTLE( 2.0, "Mavel ready, waiting for mav to be armed");
 
-				if( arm_ok ) {
-					control_started_ = true;
-					ROS_INFO("Mav armed starting position control!");
+			if( arm_ok ) {
+				control_started_ = true;
+				ROS_INFO("Mav armed starting position control!");
+			}
+		}
+
+		do_failsafe( te, msg_out );
+	} else {
+		if( !arm_ok || !state_ok )
+			control_fatal_ = true;
+
+		if( control_fatal_ ) {
+			if(!state_ok) {
+				ROS_ERROR_THROTTLE( 2.0, "[PANIC] Reference error! Failsafe enabled!");
+			} else if( !arm_ok ) {
+				ROS_ERROR_THROTTLE( 2.0, "[PANIC] Arming error! Failsafe enabled!");
+				if(param_allow_controller_reset_) {
+					ROS_WARN("Mavel resetting controller");
+
+					//Reset control inputs
+					ref_path_.clear_reference();
+					stream_reference_triplet_.data.header.stamp = ros::Time(0);
+
+					//Reset control state
+					control_started_ = false;
+					control_fatal_ = false;
 				}
+			} else {
+				ROS_FATAL("[PANIC] MAVEL ENTERED FAILSAFE UNKNOWN STATE!");
 			}
 
 			do_failsafe( te, msg_out );
+
 		} else {
-			if( arm_ok && state_ok ) {
-				do_control( te, msg_out );
-			} else {
-				control_fatal_ = true;
-			}
+			do_control( te, msg_out );
 		}
-	} else {
-		ROS_ERROR_THROTTLE( 2.0, "[PANIC] Reference or arming error! Failsafe enabled!");
-		do_failsafe( te, msg_out );
 	}
 
 	if( (!control_fatal_) || (!control_started_ || param_output_low_on_fatal_) ) {

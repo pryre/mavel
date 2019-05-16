@@ -122,6 +122,7 @@ class Mavel {
 		double param_throttle_max_;
 		double param_land_vel_;
 		bool param_output_low_on_fatal_;
+		bool param_allow_controller_reset_;
 
 		bool param_allow_timeout_position_;
 		bool param_got_valid_tri_;
