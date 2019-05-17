@@ -14,6 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   mavros_msgs
+  message_generation
+  dynamic_reconfigure
 )
 
 add_definitions(-std=c++11)
@@ -94,10 +96,9 @@ find_package(Eigen3 REQUIRED)
 ##     and list every .cfg file to be processed
 
 ## Generate dynamic reconfigure parameters in the 'cfg' folder
-# generate_dynamic_reconfigure_options(
-#   cfg/DynReconf1.cfg
-#   cfg/DynReconf2.cfg
-# )
+generate_dynamic_reconfigure_options(
+  cfg/MavelParams.cfg
+)
 
 ###################################
 ## catkin specific configuration ##
@@ -137,7 +138,7 @@ add_library(mavel
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-add_dependencies(mavel ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(mavel ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS}  ${PROJECT_NAME}_gencfg)
 
 ## Declare a C++ executable
 add_executable(mavel_node src/mavel_node.cpp)

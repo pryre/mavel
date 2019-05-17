@@ -13,6 +13,9 @@
 #include <mavros_msgs/State.h>
 #include <mavros_msgs/AttitudeTarget.h>
 
+#include <dynamic_reconfigure/server.h>
+#include <mavel/MavelParamsConfig.h>
+
 #include <eigen3/Eigen/Dense>
 #include <contrail/ContrailManager.h>
 #include <pid_controller_lib/pidController.h>
@@ -110,6 +113,8 @@ class Mavel {
 		ros::Subscriber sub_state_odometry_;
 		ros::Subscriber sub_reference_triplet_;
 
+		dynamic_reconfigure::Server<mavel::MavelParamsConfig> dyncfg_settings_;
+
 		ros::Timer timer_controller_;
 		bool control_started_;
 		bool control_fatal_;
@@ -123,6 +128,7 @@ class Mavel {
 		double param_land_vel_;
 		bool param_output_low_on_fatal_;
 		bool param_allow_controller_reset_;
+		bool param_use_pct_control_;
 
 		bool param_allow_timeout_position_;
 		bool param_got_valid_tri_;
@@ -155,6 +161,8 @@ class Mavel {
 		bool flight_ready( const ros::Time check_time );
 
 	private:
+		void callback_cfg_settings( mavel::MavelParamsConfig &config, uint32_t level );
+
 		void state_odometry_cb( const nav_msgs::Odometry msg_in );
 		void state_mav_cb( const mavros_msgs::State msg_in );
 

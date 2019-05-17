@@ -33,7 +33,9 @@ Mavel::Mavel() :
 	control_fatal_(false),
 	param_got_valid_tri_(false),
 	param_allow_controller_reset_(false),
+	param_use_pct_control_(false),
 	ref_path_(nhp_),
+	dyncfg_settings_(ros::NodeHandle(nhp_)),
 	controller_pos_x_(ros::NodeHandle(nhp_, "control/pos/x")),
 	controller_pos_y_(ros::NodeHandle(nhp_, "control/pos/y")),
 	controller_pos_z_(ros::NodeHandle(nhp_, "control/pos/z")),
@@ -41,8 +43,19 @@ Mavel::Mavel() :
 	controller_vel_y_(ros::NodeHandle(nhp_, "control/vel/y")),
 	controller_vel_z_(ros::NodeHandle(nhp_, "control/vel/z")) {
 
-	nhp_.param( "control_rate", param_rate_control_, 50.0 );
+	dyncfg_settings_.setCallback(boost::bind(&Mavel::callback_cfg_settings, this, _1, _2));
 
+	// Load static parameters
+	nhp_.param( "control_rate", param_rate_control_, 50.0 );
+	nhp_.param( "control_frame", param_control_frame_id_, std::string("map") );
+	ref_path_.set_frame_id(param_control_frame_id_);
+
+	//Data streams
+	nhp_.param( "min_rate/state/odometry", param_stream_min_rate_state_odometry_, 20.0 );
+	nhp_.param( "min_rate/state/mav_state", param_stream_min_rate_state_mav_, 0.2 );
+	nhp_.param( "min_rate/reference/triplet", param_stream_min_rate_reference_triplet_, 20.0 );
+
+	/*
 	//nhp_.param( "uav_mass", param_uav_mass_, 0.0 );
 	//ROS_ASSERT_MSG(param_uav_mass_ > 0.0, "Error: uav_mass is invalid (<0.0)!");
 
@@ -56,14 +69,7 @@ Mavel::Mavel() :
 	nhp_.param( "failsafe_output_on_fatal", param_output_low_on_fatal_, false );
 	nhp_.param( "allow_timeout_position", param_allow_timeout_position_, false );
 	nhp_.param( "allow_controller_reset", param_allow_controller_reset_, false );
-
-	nhp_.param( "control_frame", param_control_frame_id_, std::string("map") );
-	ref_path_.set_frame_id(param_control_frame_id_);
-
-	//Data streams
-	nhp_.param( "min_rate/state/odometry", param_stream_min_rate_state_odometry_, 20.0 );
-	nhp_.param( "min_rate/state/mav_state", param_stream_min_rate_state_mav_, 0.2 );
-	nhp_.param( "min_rate/reference/triplet", param_stream_min_rate_reference_triplet_, 20.0 );
+	*/
 
 	//Sanity check some parameters
 	if( ( param_land_vel_ >= 0.0) ) {
@@ -98,33 +104,22 @@ Mavel::Mavel() :
 Mavel::~Mavel() {
 }
 
-//==-- Process:
-//Position Control
-//	Perform timing checks
-//	Check active
-//	Check reference data is fresh
-//	Check setpoint data is fresh
-//	Step PID controller
-//	Save data for feedback
+void Mavel::callback_cfg_settings( mavel::MavelParamsConfig &config, uint32_t level ) {
+	param_allow_timeout_position_ = config.allow_timeout_position;
+	param_allow_controller_reset_ = config.allow_controller_reset;
+	param_use_pct_control_ = config.use_pct_control;
 
-//Velocity Control
-//	Perform timing checks
-//	Check active
-//	Check reference data is fresh
-//	Check setpoint data is fresh
-//	Step PID controller
-//	Save data for feedback
+	param_tilt_max_ = config.tilt_max;
 
-//Acceleration Control
-//	Perform timing checks
-//	Check setpoint data is fresh
-//	Calculate thrust vector
+	param_throttle_min_ = config.throttle_min;
+	param_throttle_mid_ = config.throttle_mid;
+	param_throttle_max_ = config.throttle_max;
 
-//Control Output
-//	Check whether orientation or body rate should be used (and integrate accel body rate if necessary)
-//	Do input masking as appropriate
-//	Send attitude target
-//	Send position, velocity, and acceleration feedback where relevant
+	param_output_low_on_fatal_ = config.failsafe_output_on_fatal;
+	param_land_vel_ = config.failsafe_land_vel;
+
+	//param_uav_mass_ = ...
+}
 
 void Mavel::state_odometry_cb( const nav_msgs::Odometry msg_in ) {
 	stream_update( stream_state_odometry_, &msg_in );
@@ -221,6 +216,34 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &st
 	return stream.state;
 }
 
+//==-- Process:
+//Position Control
+//	Perform timing checks
+//	Check active
+//	Check reference data is fresh
+//	Check setpoint data is fresh
+//	Step PID controller
+//	Save data for feedback
+
+//Velocity Control
+//	Perform timing checks
+//	Check active
+//	Check reference data is fresh
+//	Check setpoint data is fresh
+//	Step PID controller
+//	Save data for feedback
+
+//Acceleration Control
+//	Perform timing checks
+//	Check setpoint data is fresh
+//	Calculate thrust vector
+
+//Control Output
+//	Check whether orientation or body rate should be used (and integrate accel body rate if necessary)
+//	Do input masking as appropriate
+//	Send attitude target
+//	Send position, velocity, and acceleration feedback where relevant
+
 void Mavel::controller_cb( const ros::TimerEvent& te ) {
 	bool stream_state_odom_ok = stream_check( stream_state_odometry_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_tri_ok = stream_check( stream_reference_triplet_, te.current_real ) == HEALTH_OK;
@@ -271,7 +294,6 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 			}
 
 			do_failsafe( te, msg_out );
-
 		} else {
 			do_control( te, msg_out );
 		}
@@ -418,28 +440,68 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		ROS_ERROR_THROTTLE( 2.0, "[Timeout] Setpoint error! Emergency landing!");
 	}
 
-	//Position/Trajectory/Path Control
-	if( do_control_pos ) {
-		l_vel_ref.x += controller_pos_x_.step( dt, l_pos_ref.x, state_tf.getOrigin().getX() );
-		l_vel_ref.y += controller_pos_y_.step( dt, l_pos_ref.y, state_tf.getOrigin().getY() );
-		l_vel_ref.z += controller_pos_z_.step( dt, l_pos_ref.z, state_tf.getOrigin().getZ() );
-	} else {
-		//Prevent PID wind-up
-		controller_pos_x_.reset( state_tf.getOrigin().getX() );
-		controller_pos_y_.reset( state_tf.getOrigin().getY() );
-		controller_pos_z_.reset( state_tf.getOrigin().getZ() );
-	}
+	if(param_use_pct_control_) {
+		//Position/Trajectory/Path Control
+		if( do_control_pos ) {
+			l_vel_ref.x += controller_pos_x_.step( dt, l_pos_ref.x, state_tf.getOrigin().getX() );
+			l_vel_ref.y += controller_pos_y_.step( dt, l_pos_ref.y, state_tf.getOrigin().getY() );
+			l_vel_ref.z += controller_pos_z_.step( dt, l_pos_ref.z, state_tf.getOrigin().getZ() );
+		} else {
+			//Prevent PID wind-up
+			controller_pos_x_.reset( state_tf.getOrigin().getX() );
+			controller_pos_y_.reset( state_tf.getOrigin().getY() );
+			controller_pos_z_.reset( state_tf.getOrigin().getZ() );
+		}
 
-	//Velocity Controller
-	if( do_control_vel ) {
-		l_acc_ref.x += controller_vel_x_.step( dt, l_vel_ref.x, state_vel.getX() );
-		l_acc_ref.y += controller_vel_y_.step( dt, l_vel_ref.y, state_vel.getY() );
-		l_acc_ref.z += controller_vel_z_.step( dt, l_vel_ref.z, state_vel.getZ() );
+		//Velocity Controller
+		if( do_control_vel ) {
+			l_acc_ref.x += controller_vel_x_.step( dt, l_vel_ref.x, state_vel.getX() );
+			l_acc_ref.y += controller_vel_y_.step( dt, l_vel_ref.y, state_vel.getY() );
+			l_acc_ref.z += controller_vel_z_.step( dt, l_vel_ref.z, state_vel.getZ() );
+		} else {
+			//Prevent PID wind-up
+			controller_vel_x_.reset( state_vel.getX() );
+			controller_vel_y_.reset( state_vel.getY() );
+			controller_vel_z_.reset( state_vel.getZ() );
+		}
 	} else {
-		//Prevent PID wind-up
-		controller_vel_x_.reset( state_vel.getX() );
-		controller_vel_y_.reset( state_vel.getY() );
-		controller_vel_z_.reset( state_vel.getZ() );
+		geometry_msgs::Point eff_pos;
+		eff_pos.x = 0.0;
+		eff_pos.y = 0.0;
+		eff_pos.z = 0.0;
+
+		geometry_msgs::Vector3 eff_vel;
+		eff_vel.x = 0.0;
+		eff_vel.y = 0.0;
+		eff_vel.z = 0.0;
+
+		//Position/Trajectory/Path Control
+		if( do_control_pos ) {
+			eff_pos.x = controller_pos_x_.step( dt, l_pos_ref.x, state_tf.getOrigin().getX() );
+			eff_pos.y = controller_pos_y_.step( dt, l_pos_ref.y, state_tf.getOrigin().getY() );
+			eff_pos.z = controller_pos_z_.step( dt, l_pos_ref.z, state_tf.getOrigin().getZ() );
+		} else {
+			//Prevent PID wind-up
+			controller_pos_x_.reset( state_tf.getOrigin().getX() );
+			controller_pos_y_.reset( state_tf.getOrigin().getY() );
+			controller_pos_z_.reset( state_tf.getOrigin().getZ() );
+		}
+
+		//Velocity Controller
+		if( do_control_vel ) {
+			eff_vel.x = controller_vel_x_.step( dt, l_vel_ref.x, state_vel.getX() );
+			eff_vel.y = controller_vel_y_.step( dt, l_vel_ref.y, state_vel.getY() );
+			eff_vel.z = controller_vel_z_.step( dt, l_vel_ref.z, state_vel.getZ() );
+		} else {
+			//Prevent PID wind-up
+			controller_vel_x_.reset( state_vel.getX() );
+			controller_vel_y_.reset( state_vel.getY() );
+			controller_vel_z_.reset( state_vel.getZ() );
+		}
+
+		l_acc_ref.x += eff_pos.x + eff_vel.x;
+		l_acc_ref.y += eff_pos.y + eff_vel.y;
+		l_acc_ref.z += eff_pos.z + eff_vel.z;
 	}
 
 	tf2::Vector3 a(l_acc_ref.x, l_acc_ref.y, l_acc_ref.z + GRAVITY);
