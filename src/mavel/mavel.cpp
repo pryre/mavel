@@ -417,7 +417,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 
 			do_control_accel = true;
 		} else {
-			ROS_ERROR_THROTTLE(2.0, "[Mavel] Unexpected error handling triplet: triplet had unexpected layout");
+			ROS_ERROR_THROTTLE(2.0, "[Mavel] Unexpected error handling triplet: triplet had unexpected layout (0x%x)", stream_reference_triplet_.data.type_mask);
 		}
 	}
 
