@@ -405,19 +405,19 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 			do_control_pos = true;
 			do_control_vel = true;
 			do_control_accel = true;
-		} else if(stream_reference_triplet_.data.type_mask == TRIPLET_SETP_VEL) {
+		} else if(goal_tri.type_mask == TRIPLET_SETP_VEL) {
 			l_vel_ref = goal_tri.velocity;
 			r_rot_ref = goal_tri.yaw_rate;
 
 			do_control_vel = true;
 			do_control_accel = true;
-		} else if(stream_reference_triplet_.data.type_mask == TRIPLET_SETP_ACC) {
+		} else if(goal_tri.type_mask == TRIPLET_SETP_ACC) {
 			l_acc_ref = goal_tri.acceleration_or_force;
 			r_rot_ref = goal_tri.yaw_rate;
 
 			do_control_accel = true;
 		} else {
-			ROS_ERROR_THROTTLE(2.0, "[Mavel] Unexpected error handling triplet: triplet had unexpected layout (0x%x)", stream_reference_triplet_.data.type_mask);
+			ROS_ERROR_THROTTLE(2.0, "[Mavel] Unexpected error handling triplet: unexpected layout (0x%x)", goal_tri.type_mask);
 		}
 	}
 
