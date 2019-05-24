@@ -519,7 +519,8 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		tf2::Vector3 nThrust = T / est_force_max;
 		*/
 		//Thrust Calculation
-		tf2::Vector3 nThrust = param_throttle_mid_ * ( a /  GRAVITY );
+		//tf2::Vector3 nThrust = (param_throttle_mid_ + controller_vel_z_.getOutputIterm()) * ( a /  GRAVITY );
+		tf2::Vector3 nThrust = (param_throttle_mid_) * ( a /  GRAVITY );
 		tf2::Vector3 xyThrust(nThrust.getX(), nThrust.getY(), 0.0);
 		tf2::Quaternion goalThrustRotation(0.0, 0.0, 0.0, 1.0);
 
@@ -536,6 +537,8 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 				nThrust.setY( k*nThrust.getY() );
 				xyThrust.setX( nThrust.getX() );
 				xyThrust.setY( nThrust.getY() );
+
+				ROS_WARN_THROTTLE( 1.0, "Max tilt-limit, scaling XY" );
 			}
 		}
 
