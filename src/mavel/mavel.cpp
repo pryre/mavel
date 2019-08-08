@@ -425,6 +425,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	if(!do_control_accel) {
 		goal_tri.header.frame_id = param_control_frame_id_;
 		goal_tri.header.stamp = te.current_real;
+		goal_tri.type_mask = goal_tri.FRAME_LOCAL_NED;
 		goal_tri.type_mask = TRIPLET_SETP_VEL;
 		goal_tri.velocity.x = 0.0;
 		goal_tri.velocity.y = 0.0;
@@ -438,6 +439,37 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		do_control_accel = true;
 
 		ROS_ERROR_THROTTLE( 2.0, "[Timeout] Setpoint error! Emergency landing!");
+	}
+
+	//XXX:	All control is performed in the ENU map frame
+	//		This means that we have to convert any specified
+	//		cooridnate frames from the Tri message back into
+	//		the ENU frame if they aren't set to
+	//		FRAME_LOCAL_NED (which is represents ENU frame
+	//		while we're still in ROS-land!)
+	if(goal_tri.coordinate_frame != goal_tri.FRAME_LOCAL_NED) {
+		switch(goal_tri.coordinate_frame) {
+			//TODO: case goal_tri.FRAME_LOCAL_OFFSET_NED:
+			//TODO: case goal_tri.FRAME_BODY_NED:
+			case goal_tri.FRAME_BODY_OFFSET_NED: {
+				tf2::Vector3 cr_z = tf2::Vector3(0.0,0.0,1.0);
+				tf2::Vector3 cr_xr = state_tf.getBasis()*tf2::Vector3(1.0,0.0,0.0);
+				tf2::Vector3 cr_y = tf2::tf2Cross(cr_z,cr_xr);
+				tf2::Vector3 cr_x = tf2::tf2Cross(cr_y,cr_z);
+
+				tf2::Matrix3x3 cr_rot(cr_x.x(),cr_x.y(),cr_x.z(),
+									  cr_y.x(),cr_y.y(),cr_y.z(),
+									  cr_z.x(),cr_z.y(),cr_z.z());
+				break;
+			}
+			default: {
+				do_control_pos = false;
+				do_control_vel = false;
+				do_control_accel = false;
+
+				ROS_ERROR_THROTTLE( 2.0, "[Mavel] Unsupported coordinate frame specified (%i)! Ignoring reference.", goal_tri.coordinate_frame);
+			}
+		}
 	}
 
 	if(param_use_pct_control_) {

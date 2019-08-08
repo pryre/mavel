@@ -145,6 +145,7 @@ add_executable(mavel_node src/mavel_node.cpp)
 add_executable(tf_odom_node src/tf_odom_node.cpp)
 add_executable(pose_odom_node src/pose_odom_node.cpp)
 add_executable(odom_triplet_node src/odom_triplet_node.cpp)
+add_executable(multi_teleop_node src/multi_teleop_node.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -152,6 +153,7 @@ add_dependencies(mavel_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTE
 add_dependencies(tf_odom_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(pose_odom_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(odom_triplet_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(multi_teleop_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(mavel
@@ -172,6 +174,10 @@ target_link_libraries(pose_odom_node
 )
 
 target_link_libraries(odom_triplet_node
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(multi_teleop_node
   ${catkin_LIBRARIES}
 )
 

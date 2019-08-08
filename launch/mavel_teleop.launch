@@ -1,0 +1,16 @@
+<?xml version='1.0'?>
+<launch>
+	<arg name="uav_name" default="emulated_uav"/>
+
+	<group ns="$(arg uav_name)">
+		<node pkg="mavel" type="multi_teleop_node" name="mavel_teleop" clear_params="true" output="screen">
+			<!-- Interface Topics /-->
+			<remap from="~input/pose" to="move_base_full/goal"/>
+			<remap from="~input/pose_ground" to="move_base_simple/goal"/>
+			<remap from="~input/twist" to="cmd_vel"/>
+			<remap from="~input/twist_receeding_horizon" to="cmd_vel_receeding"/>
+
+			<remap from="~triplet" to="mavel/reference/triplet"/>
+		</node>
+	</group>
+</launch>
