@@ -3,6 +3,7 @@
 #include <ros/ros.h>
 
 #include <tf2/transform_datatypes.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Vector3.h>
@@ -425,7 +426,7 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 	if(!do_control_accel) {
 		goal_tri.header.frame_id = param_control_frame_id_;
 		goal_tri.header.stamp = te.current_real;
-		goal_tri.type_mask = goal_tri.FRAME_LOCAL_NED;
+		goal_tri.coordinate_frame = goal_tri.FRAME_LOCAL_NED;
 		goal_tri.type_mask = TRIPLET_SETP_VEL;
 		goal_tri.velocity.x = 0.0;
 		goal_tri.velocity.y = 0.0;
@@ -460,6 +461,25 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 				tf2::Matrix3x3 cr_rot(cr_x.x(),cr_x.y(),cr_x.z(),
 									  cr_y.x(),cr_y.y(),cr_y.z(),
 									  cr_z.x(),cr_z.y(),cr_z.z());
+
+				tf2::Vector3 rp = cr_rot*tf2::Vector3(l_pos_ref.x,l_pos_ref.y,l_pos_ref.z);
+				tf2::Vector3 rv = cr_rot*tf2::Vector3(l_vel_ref.x,l_vel_ref.y,l_vel_ref.z);
+				tf2::Vector3 ra = cr_rot*tf2::Vector3(l_acc_ref.x,l_acc_ref.y,l_acc_ref.z);
+
+				l_pos_ref.x = rp.x();
+				l_pos_ref.y = rp.y();
+				l_pos_ref.z = rp.z();
+				l_vel_ref.x = rv.x();
+				l_vel_ref.y = rv.y();
+				l_vel_ref.z = rv.z();
+				l_acc_ref.x = ra.x();
+				l_acc_ref.y = ra.y();
+				l_acc_ref.z = ra.z();
+
+				//Rotate the yaw vector so it's relative to the body frame
+				tf2::Vector3 rot_ref_vec_b = cr_rot*tf2::Vector3(0.0,0.0,rot_ref);
+				rot_ref = rot_ref_vec_b.z();
+
 				break;
 			}
 			default: {
