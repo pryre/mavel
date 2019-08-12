@@ -9,6 +9,7 @@
 #include <mavel/MultiTeleopParamsConfig.h>
 
 #include <eigen3/Eigen/Dense>
+#include <string>
 #include <math.h>
 
 class MultiTeleopNode {
@@ -21,6 +22,7 @@ class MultiTeleopNode {
 
 		ros::Subscriber sub_pose_;
 		ros::Subscriber sub_move_;
+		ros::Subscriber sub_cmdvel_;
 		ros::Subscriber sub_twist_;
 		ros::Subscriber sub_receed_;
 
@@ -28,6 +30,7 @@ class MultiTeleopNode {
 
 		double param_move_height_;
 		double param_output_rate_;
+		std::string param_cmdvel_frame_;
 
 		dynamic_reconfigure::Server<mavel::MultiTeleopParamsConfig> dyncfg_settings_;
 
@@ -37,16 +40,19 @@ class MultiTeleopNode {
 			nhp_("~"),
 			dyncfg_settings_(ros::NodeHandle(nhp_)),
 			param_move_height_(1.0),
-			param_output_rate_(0.0) {
+			param_output_rate_(0.0),
+			param_cmdvel_frame_("body") {
 
 			// Prep the timer for setup through dynamic reconfigure
 			timer_ = nhp_.createTimer( ros::Duration(0), &MultiTeleopNode::timer_cb, this );
 
-			//Dynamic Reconfigure
+			//Params and Dynamic Reconfigure
+			nhp_.param( "cmd_vel_frame", param_cmdvel_frame_, param_cmdvel_frame_ );
 			dyncfg_settings_.setCallback(boost::bind(&MultiTeleopNode::callback_cfg_settings, this, _1, _2));
 
 			sub_pose_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "input/pose", 10, &MultiTeleopNode::pose_cb, this );
 			sub_move_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "input/pose_ground", 10, &MultiTeleopNode::ground_cb, this );
+			sub_cmdvel_ = nhp_.subscribe<geometry_msgs::Twist>( "input/cmd_vel", 10, &MultiTeleopNode::cmdvel_cb, this );
 			sub_twist_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "input/twist", 10, &MultiTeleopNode::twist_cb, this );
 			sub_receed_ = nhp_.subscribe<geometry_msgs::TwistStamped>( "input/twist_receeding_horizon", 10, &MultiTeleopNode::receed_cb, this );
 
@@ -94,6 +100,18 @@ class MultiTeleopNode {
 			}
 		}
 
+		void twist_handler( const geometry_msgs::TwistStamped& twist, const uint8_t& coordinate_frame ) {
+			msg_out_.header = twist.header;
+			msg_out_.coordinate_frame = msg_out_.FRAME_BODY_OFFSET_NED;
+			msg_out_.type_mask = msg_out_.IGNORE_AFX | msg_out_.IGNORE_AFY | msg_out_.IGNORE_AFZ | msg_out_.IGNORE_PX | msg_out_.IGNORE_PY | msg_out_.IGNORE_PZ | msg_out_.IGNORE_YAW;
+			msg_out_.velocity = twist.twist.linear;
+			msg_out_.yaw_rate = twist.twist.angular.z;
+
+			if(param_output_rate_ <= 0.0) {
+				pub_triplet_.publish(msg_out_);
+			}
+		}
+
 		void pose_cb( const geometry_msgs::PoseStamped::ConstPtr& msg_in) {
 			pose_handler(*msg_in, mavros_msgs::PositionTarget::FRAME_LOCAL_NED);
 		}
@@ -104,16 +122,17 @@ class MultiTeleopNode {
 			pose_handler(pose, mavros_msgs::PositionTarget::FRAME_LOCAL_NED);
 		}
 
-		void twist_cb( const geometry_msgs::TwistStamped::ConstPtr& msg_in) {
-			msg_out_.header = msg_in->header;
-			msg_out_.coordinate_frame = msg_out_.FRAME_BODY_OFFSET_NED;
-			msg_out_.type_mask = msg_out_.IGNORE_AFX | msg_out_.IGNORE_AFY | msg_out_.IGNORE_AFZ;
-			msg_out_.velocity = msg_in->twist.linear;
-			msg_out_.yaw_rate = msg_in->twist.angular.z;
+		void cmdvel_cb( const geometry_msgs::Twist::ConstPtr& msg_in) {
+			geometry_msgs::TwistStamped twist;
+			twist.header.frame_id = param_cmdvel_frame_;
+			twist.header.stamp = ros::Time::now();
+			twist.twist = *msg_in;
+			twist_handler(twist, mavros_msgs::PositionTarget::FRAME_BODY_OFFSET_NED);
+		}
 
-			if(param_output_rate_ <= 0.0) {
-				pub_triplet_.publish(msg_out_);
-			}
+		void twist_cb( const geometry_msgs::TwistStamped::ConstPtr& msg_in) {
+			geometry_msgs::TwistStamped twist = *msg_in;
+			twist_handler(twist, mavros_msgs::PositionTarget::FRAME_BODY_OFFSET_NED);
 		}
 
 		void receed_cb( const geometry_msgs::TwistStamped::ConstPtr& msg_in) {

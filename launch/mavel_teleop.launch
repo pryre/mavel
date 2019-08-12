@@ -5,13 +5,15 @@
 	<group ns="$(arg uav_name)">
 		<node pkg="mavel" type="multi_teleop_node" name="mavel_teleop" clear_params="true" output="screen">
 			<!-- Operational Parameters -->
+			<param name="cmd_vel_frame" value="$(arg uav_name)" type="string"/>
 			<param name="output_rate" value="20.0" type="double"/>
 			<param name="pose_ground_height" value="1.0" type="double"/>
 
 			<!-- Interface Topics /-->
 			<!--remap from="~input/pose" to="move_base_full/goal"/-->
 			<remap from="~input/pose_ground" to="/move_base_simple/goal"/>
-			<remap from="~input/twist" to="/cmd_vel"/>
+			<remap from="~input/cmd_vel" to="/cmd_vel"/>
+			<!--remap from="~input/twist" to="cmd_vel_stamped"/-->
 			<!--remap from="~input/twist_receeding_horizon" to="cmd_vel_receeding"/-->
 
 			<remap from="~triplet" to="mavel/reference/triplet"/>

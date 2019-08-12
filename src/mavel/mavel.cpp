@@ -131,32 +131,27 @@ void Mavel::state_mav_cb( const mavros_msgs::State msg_in ) {
 }
 
 void Mavel::reference_triplet_cb( const mavros_msgs::PositionTarget msg_in ) {
-	//Check to make sure we're in the right reference frame
-	if(msg_in.coordinate_frame == msg_in.FRAME_LOCAL_NED) {
-		if( (msg_in.type_mask == TRIPLET_SETP_POS) ||
-			(msg_in.type_mask == TRIPLET_SETP_VEL) ||
-			(msg_in.type_mask == TRIPLET_SETP_ACC) ||
-			(msg_in.type_mask == TRIPLET_TRAJ_PVEL) ||
-			(msg_in.type_mask == TRIPLET_TRAJ_FULL) ) {
+	if( (msg_in.type_mask == TRIPLET_SETP_POS) ||
+		(msg_in.type_mask == TRIPLET_SETP_VEL) ||
+		(msg_in.type_mask == TRIPLET_SETP_ACC) ||
+		(msg_in.type_mask == TRIPLET_TRAJ_PVEL) ||
+		(msg_in.type_mask == TRIPLET_TRAJ_FULL) ) {
 
-			stream_update( stream_reference_triplet_, &msg_in );
+		stream_update( stream_reference_triplet_, &msg_in );
 
-			if( (msg_in.header.stamp > ros::Time(0)) &&
-				( (msg_in.type_mask == TRIPLET_SETP_POS) || (msg_in.type_mask == TRIPLET_TRAJ_PVEL) || (msg_in.type_mask == TRIPLET_TRAJ_FULL) ) ) {
+		if( (msg_in.header.stamp > ros::Time(0)) &&
+			( (msg_in.type_mask == TRIPLET_SETP_POS) || (msg_in.type_mask == TRIPLET_TRAJ_PVEL) || (msg_in.type_mask == TRIPLET_TRAJ_FULL) ) ) {
 
-				if(param_allow_timeout_position_ && !param_got_valid_tri_) {
-					ROS_INFO("Mavel stream fallback initialized on: %s", stream_reference_triplet_.stream_topic.c_str() );
-				}
-
-				param_got_valid_tri_ = true;
-			} else {
-				param_got_valid_tri_ = false;	//XXX: Need to reset this, otherwise we might hang onto a vel by accident
+			if(param_allow_timeout_position_ && !param_got_valid_tri_) {
+				ROS_INFO("Mavel stream fallback initialized on: %s", stream_reference_triplet_.stream_topic.c_str() );
 			}
+
+			param_got_valid_tri_ = true;
 		} else {
-			ROS_WARN_THROTTLE(2.0, "Unsupported triplet type mask: %i", msg_in.type_mask);
+			param_got_valid_tri_ = false;	//XXX: Need to reset this, otherwise we might hang onto a vel by accident
 		}
 	} else {
-		ROS_WARN_THROTTLE(2.0, "Unsupported triplet coordinate frame: %i", msg_in.coordinate_frame);
+		ROS_WARN_THROTTLE(2.0, "Unsupported triplet type mask: %i", msg_in.type_mask);
 	}
 }
 
@@ -458,9 +453,10 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 				tf2::Vector3 cr_y = tf2::tf2Cross(cr_z,cr_xr);
 				tf2::Vector3 cr_x = tf2::tf2Cross(cr_y,cr_z);
 
-				tf2::Matrix3x3 cr_rot(cr_x.x(),cr_x.y(),cr_x.z(),
-									  cr_y.x(),cr_y.y(),cr_y.z(),
-									  cr_z.x(),cr_z.y(),cr_z.z());
+				//Get body offset to world rotation
+				tf2::Matrix3x3 cr_rot = tf2::Matrix3x3(cr_x.x(),cr_y.x(),cr_z.x(),
+													   cr_x.y(),cr_y.y(),cr_z.y(),
+													   cr_x.z(),cr_y.z(),cr_z.z());
 
 				tf2::Vector3 rp = cr_rot*tf2::Vector3(l_pos_ref.x,l_pos_ref.y,l_pos_ref.z);
 				tf2::Vector3 rv = cr_rot*tf2::Vector3(l_vel_ref.x,l_vel_ref.y,l_vel_ref.z);
@@ -647,15 +643,9 @@ void Mavel::do_control( const ros::TimerEvent& te, mavros_msgs::AttitudeTarget &
 		thrust_y = thrust_z.cross( thrust_x );
 
 		//Get rotation matrix
-		tf2::Matrix3x3 R( thrust_x.getX(),
-						  thrust_y.getX(),
-						  thrust_z.getX(),
-						  thrust_x.getY(),
-						  thrust_y.getY(),
-						  thrust_z.getY(),
-						  thrust_x.getZ(),
-						  thrust_y.getZ(),
-						  thrust_z.getZ() );
+		tf2::Matrix3x3 R( thrust_x.getX(), thrust_y.getX(), thrust_z.getX(),
+						  thrust_x.getY(), thrust_y.getY(), thrust_z.getY(),
+						  thrust_x.getZ(), thrust_y.getZ(), thrust_z.getZ() );
 
 		//Get quaternion from R
 		R.getRotation( goalThrustRotation );
