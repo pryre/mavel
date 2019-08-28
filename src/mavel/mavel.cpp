@@ -74,7 +74,7 @@ Mavel::Mavel() :
 
 	//Sanity check some parameters
 	if( ( param_land_vel_ >= 0.0) ) {
-		 ROS_FATAL("Invalid parameter settings, quiting mavel");
+		 ROS_FATAL("Mavel: Invalid parameter settings, quiting");
 		 ros::shutdown();
 	}
 
@@ -96,7 +96,7 @@ Mavel::Mavel() :
 	sub_reference_triplet_ = nhp_.subscribe<mavros_msgs::PositionTarget>( "reference/triplet", 10, &Mavel::reference_triplet_cb, this );
 
 	//Wait for streams before starting
-	ROS_INFO("Mavel ready, waiting for control inputs...");
+	ROS_INFO("Mavel: waiting for mav to be armed and in offboard mode...");
 
 	//Timers for controllers
 	timer_controller_ = nhp_.createTimer( ros::Duration( 1.0 / param_rate_control_ ), &Mavel::controller_cb, this );
@@ -143,7 +143,7 @@ void Mavel::reference_triplet_cb( const mavros_msgs::PositionTarget msg_in ) {
 			( (msg_in.type_mask == TRIPLET_SETP_POS) || (msg_in.type_mask == TRIPLET_TRAJ_PVEL) || (msg_in.type_mask == TRIPLET_TRAJ_FULL) ) ) {
 
 			if(param_allow_timeout_position_ && !param_got_valid_tri_) {
-				ROS_INFO("Mavel stream fallback initialized on: %s", stream_reference_triplet_.stream_topic.c_str() );
+				ROS_INFO("Mavel: stream fallback initialized on: %s", stream_reference_triplet_.stream_topic.c_str() );
 			}
 
 			param_got_valid_tri_ = true;
@@ -151,7 +151,7 @@ void Mavel::reference_triplet_cb( const mavros_msgs::PositionTarget msg_in ) {
 			param_got_valid_tri_ = false;	//XXX: Need to reset this, otherwise we might hang onto a vel by accident
 		}
 	} else {
-		ROS_WARN_THROTTLE(2.0, "Unsupported triplet type mask: %i", msg_in.type_mask);
+		ROS_WARN_THROTTLE(2.0, "Mavel: Unsupported triplet type mask: %i", msg_in.type_mask);
 	}
 }
 
@@ -198,7 +198,7 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &st
 		//If the stream was previously OK, then send warning
 		if( stream.state == HEALTH_OK ) {
 			stream.state = HEALTH_TIMEOUT;
-			ROS_WARN("Mavel stream timeout on: %s", stream.stream_topic.c_str() );
+			ROS_WARN("Mavel: stream timeout on: %s", stream.stream_topic.c_str() );
 		}
 
 		//Reset the stream counter
@@ -206,7 +206,7 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &st
 	} else if( ( stream.count > stream.stream_count ) && ( stream.state != HEALTH_OK ) ) {
 		//If we have established a stream, and it wasn't already OK
 		stream.state = HEALTH_OK;
-		ROS_INFO("Mavel stream connected on: %s", stream.stream_topic.c_str() );
+		ROS_INFO("Mavel: stream connected on: %s", stream.stream_topic.c_str() );
 	}
 
 	return stream.state;
@@ -255,12 +255,14 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 	msg_out.orientation.w = 1.0;	//Just to make sure the quaternion is initialized correctly
 
 	if( !control_started_ ) {
-		if( state_ok && reference_ok ) {
-			ROS_INFO_THROTTLE( 2.0, "Mavel ready, waiting for mav to be armed");
+		if( state_ok && arm_ok ) {
+			ROS_INFO_THROTTLE( 2.0, "Mavel: ready and waiting for input reference");
+			if ( !ref_path_.is_allowing_new_goals() )
+				ref_path_.allow_new_goals(true);
 
-			if( arm_ok ) {
+			if( reference_ok ) {
 				control_started_ = true;
-				ROS_INFO("Mav armed starting position control!");
+				ROS_INFO("Mavel: Starting position control!");
 			}
 		}
 
@@ -278,6 +280,7 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 					ROS_WARN("Mavel resetting controller");
 
 					//Reset control inputs
+					ref_path_.allow_new_goals(false);
 					ref_path_.clear_reference();
 					stream_reference_triplet_.data.header.stamp = ros::Time(0);
 
