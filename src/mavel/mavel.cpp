@@ -78,6 +78,8 @@ Mavel::Mavel() :
 		 ros::shutdown();
 	}
 
+	reset_control_inputs();
+
 	stream_state_odometry_ = stream_init<nav_msgs::Odometry>( param_stream_min_rate_state_odometry_, "state/odometry" );
 	stream_state_mav_ = stream_init<mavros_msgs::State>( param_stream_min_rate_state_mav_, "state/mav_state" );
 	stream_reference_triplet_ = stream_init<mavros_msgs::PositionTarget>( param_stream_min_rate_reference_triplet_, "reference/triplet" );
@@ -212,6 +214,13 @@ mavel_data_stream_states Mavel::stream_check( mavel_data_stream<streamDataT> &st
 	return stream.state;
 }
 
+void Mavel::reset_control_inputs( void ) {
+	ref_path_.allow_new_goals(false);
+	ref_path_.clear_reference();
+
+	stream_reference_triplet_.data.header.stamp = ros::Time(0);
+}
+
 //==-- Process:
 //Position Control
 //	Perform timing checks
@@ -268,29 +277,35 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 
 		do_failsafe( te, msg_out );
 	} else {
-		if( !arm_ok || !state_ok )
+		if( ( !arm_ok || !state_ok ) && !control_fatal_) {
+			//References were ok, but now are in fatal mode
 			control_fatal_ = true;
 
-		if( control_fatal_ ) {
+			reset_control_inputs();
+
 			if(!state_ok) {
-				ROS_ERROR_THROTTLE( 2.0, "[PANIC] Reference error! Failsafe enabled!");
-			} else if( !arm_ok ) {
-				ROS_ERROR_THROTTLE( 2.0, "[PANIC] Arming error! Failsafe enabled!");
-				if(param_allow_controller_reset_) {
-					ROS_WARN("Mavel resetting controller");
-
-					//Reset control inputs
-					ref_path_.allow_new_goals(false);
-					ref_path_.clear_reference();
-					stream_reference_triplet_.data.header.stamp = ros::Time(0);
-
-					//Reset control state
-					control_started_ = false;
-					control_fatal_ = false;
-				}
-			} else {
-				ROS_FATAL("[PANIC] MAVEL ENTERED FAILSAFE UNKNOWN STATE!");
+				ROS_ERROR("Mavel: Input reference error!");
 			}
+
+			if( !arm_ok ) {
+				ROS_ERROR("Mavel: Arming error!");
+			}
+		}
+
+		if( control_fatal_ ) {
+			//We are allowed to reset
+			if(state_ok && arm_ok && param_allow_controller_reset_) {
+				ROS_WARN("Mavel resetting controller");
+
+				//Should have happened already, but just to be safe
+				reset_control_inputs();
+
+				//Reset control state
+				control_started_ = false;
+				control_fatal_ = false;
+			}
+
+			ROS_WARN_THROTTLE( 2.0, "Mavel: Failsafe enabled!");
 
 			do_failsafe( te, msg_out );
 		} else {

@@ -168,6 +168,8 @@ class Mavel {
 
 		void reference_triplet_cb( const mavros_msgs::PositionTarget msg_in );
 
+		void reset_control_inputs( void );
+
 		//Handles the controller loop
 		void controller_cb( const ros::TimerEvent& timerCallback );
 		void do_control( const ros::TimerEvent& timerCallback, mavros_msgs::AttitudeTarget &goal_att );
