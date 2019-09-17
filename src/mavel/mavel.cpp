@@ -105,10 +105,15 @@ Mavel::Mavel() :
 }
 
 Mavel::~Mavel() {
+	if( ros::ok() )
+		shutdown();
 }
 
 void Mavel::shutdown( void ) {
-	ROS_INFO("shutdown");
+	ROS_INFO("Mavel: Shutting down...");
+	//Clear the control inputs, which will abort all current missions
+	//in contrail and send out a not-ready to be extra sure
+	reset_control_inputs();
 }
 
 void Mavel::callback_cfg_settings( mavel::MavelParamsConfig &config, uint32_t level ) {
