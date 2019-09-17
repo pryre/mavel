@@ -158,6 +158,8 @@ class Mavel {
 
 		~Mavel( void );
 
+		void shutdown( void );
+
 		bool flight_ready( const ros::Time check_time );
 
 	private:

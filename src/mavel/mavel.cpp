@@ -107,6 +107,10 @@ Mavel::Mavel() :
 Mavel::~Mavel() {
 }
 
+void Mavel::shutdown( void ) {
+	ROS_INFO("shutdown");
+}
+
 void Mavel::callback_cfg_settings( mavel::MavelParamsConfig &config, uint32_t level ) {
 	param_allow_timeout_position_ = config.allow_timeout_position;
 	param_allow_controller_reset_ = config.allow_controller_reset;
