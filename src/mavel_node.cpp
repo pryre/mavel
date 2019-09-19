@@ -5,8 +5,10 @@
 static Mavel* _mavel;
 
 static void cleanup( void ) {
-	if (_mavel != NULL)
-		delete _mavel;
+	if (_mavel != NULL) {
+		_mavel->shutdown();
+		_mavel = NULL;
+	}
 }
 
 static void shutdown_sigint_handler( int sig ) {
@@ -19,10 +21,10 @@ static void shutdown_sigint_handler( int sig ) {
 
 int main(int argc, char** argv) {
 	ros::init(argc, argv, "mavel");
-	_mavel = new Mavel();
+	Mavel mavel;
+	_mavel = &mavel;
 
 	signal(SIGINT, shutdown_sigint_handler);
-
 	ros::spin();
 
 	//Clean up allocated variables
