@@ -265,8 +265,7 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 	bool stream_ref_tri_ok = stream_check( stream_reference_triplet_, te.current_real ) == HEALTH_OK;
 	bool stream_ref_path_ok = ref_path_.has_reference(te.current_real); //Don't use a real stream, as it's more of a once off
 
-	bool reference_ok = ( stream_state_odom_ok && ( stream_ref_path_ok ||
-													stream_ref_tri_ok ) );
+	bool reference_ok = ( stream_ref_path_ok || stream_ref_tri_ok );
 
 	bool state_ok = stream_state_odom_ok;
 	bool arm_ok = flight_ready(te.current_real);
@@ -284,6 +283,9 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 				control_started_ = true;
 				ROS_INFO("Mavel: Starting position control!");
 			}
+		} else {
+			if ( ref_path_.is_allowing_new_goals() )
+				ref_path_.allow_new_goals(false);
 		}
 
 		do_failsafe( te, msg_out );
