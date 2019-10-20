@@ -19,6 +19,7 @@
 #include <eigen3/Eigen/Dense>
 #include <contrail/ContrailManager.h>
 #include <pid_controller_lib/pidController.h>
+#include <pid_controller_lib/pidTrackingController.h>
 
 #include <string>
 
@@ -128,7 +129,7 @@ class Mavel {
 		double param_land_vel_;
 		bool param_output_low_on_fatal_;
 		bool param_allow_controller_reset_;
-		bool param_use_pct_control_;
+		bool param_use_tracking_pid_;
 
 		bool param_allow_timeout_position_;
 		bool param_got_valid_tri_;
@@ -150,6 +151,9 @@ class Mavel {
 		pidController controller_vel_x_;
 		pidController controller_vel_y_;
 		pidController controller_vel_z_;
+		pidTrackingController controller_track_x_;
+		pidTrackingController controller_track_y_;
+		pidTrackingController controller_track_z_;
 
 		std::string param_control_frame_id_;
 
