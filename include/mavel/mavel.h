@@ -17,7 +17,7 @@
 #include <mavel/MavelParamsConfig.h>
 
 #include <eigen3/Eigen/Dense>
-#include <contrail/ContrailManager.h>
+#include <contrail_manager/ContrailManager.h>
 #include <pid_controller_lib/pidController.h>
 #include <pid_controller_lib/pidTrackingController.h>
 

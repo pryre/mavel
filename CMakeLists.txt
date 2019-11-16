@@ -6,7 +6,7 @@ project(mavel)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   pid_controller_lib
-  contrail
+  contrail_manager
   geometry_msgs
   tf2_geometry_msgs
   nav_msgs
