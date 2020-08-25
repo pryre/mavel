@@ -118,6 +118,7 @@ void Mavel::shutdown( void ) {
 		//Clear the control inputs, which will abort all current missions
 		//in contrail and send out a not-ready to be extra sure
 		reset_control_inputs();
+		ros::shutdown();
 	}
 }
 
@@ -134,6 +135,17 @@ void Mavel::callback_cfg_settings( mavel::MavelParamsConfig &config, uint32_t le
 
 	param_output_low_on_fatal_ = config.failsafe_output_on_fatal;
 	param_land_vel_ = config.failsafe_land_vel;
+
+	//Do some sanity checking
+	if(param_throttle_mid_ <= param_throttle_min_) {
+		ROS_ERROR("Mavel: Throttle parameters are not valid, mid is less than min (or unset)!");
+		shutdown();		
+	}
+
+	if( (param_throttle_max_ <= param_throttle_min_) || (param_throttle_max_ <= param_throttle_mid_) ) {
+		ROS_ERROR("Mavel: Throttle parameters are not valid, max is less than mid or min!");
+		shutdown();
+	}
 
 	//param_uav_mass_ = ...
 }

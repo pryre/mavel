@@ -14,7 +14,7 @@ contrail:
   spline_res_per_sec: 5
 
 throttle_min: 0.0
-throttle_mid: 0.4
+throttle_mid: 0.0 # Refer to README.md for instructions on setting 
 throttle_max: 0.9
 
 #uav_mass: 2.035 # Not currently used
