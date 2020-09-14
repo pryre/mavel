@@ -21,8 +21,8 @@ failsafe_output_on_fatal: False
 
 # Path-following options
 contrail:
-  end_position_accuracy: 0.1
-  end_yaw_accuracy: 0.1
+  end_position_accuracy: 0.2
+  end_yaw_accuracy: 0.2
   spline_res_per_sec: 5
   use_position_ref: True
   use_velocity_ref: True
