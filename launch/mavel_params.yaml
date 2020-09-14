@@ -11,7 +11,7 @@ allow_controller_reset: False
 tilt_max: 0.39
 # Trottle Tuning (Refer to README.md for instructions on setting)
 throttle_min: 0.0
-throttle_mid: 0.425224781036
+throttle_mid: 0.0
 throttle_max: 0.9
 
 # Emergency Landing Velocity (must be negative!)
