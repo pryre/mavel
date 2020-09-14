@@ -8,9 +8,20 @@ A position controller for multirotors
 - `control_frame` ("map"): Frame ID to use on the output messages
 
 #### Flight Settings & Limits
-- `throttle/min` (0.0): Minimum throttle output that will be output
-- `throttle/mid` (0.5): Hover throttle estimate (set low for initial tuning/testing)
-- `throttle/max` (0.9): Maximum throttle output that will be output
+- `throttle_min` (0.0): Minimum throttle output that will be output
+- `throttle_mid` (0.0): Hover throttle estimate (set low for initial tuning/testing)
+  - **Warning:** setting this value too high may make your UAV take-off very quickly or not be able to perform a steady hover.
+  - To tune:
+    - Figure out your required hover throttle (take a reading of throttle position from manual flight).
+    - Start with a value 5% less than this reading (i.e. if your reading was 40%, enter `throttle_mid` as 35%).
+    - If take-off is too slow (e.g. > 5 seconds), increase this value in small increments (e.g. 2% steps).
+  - If you cannot take a throttle reading for some reason:
+    - Start with a value of 10-20%
+    - Aim to see the UAV take-off after ~10 seconds.
+    - Increment in mid-sized steps (e.g. 5% steps) until a 10 second take-off is achieved.
+    - Decrease increment steps to small increments (e.g. 2%) until a successful takeoff is achieved.
+  - **Note:** Most UAVs should have `throttle_mid` set in the range of 30-50%. If your UAV is outside of this range, it is likely over- or under-powered.
+- `throttle_max` (0.9): Maximum throttle output that will be output
 - `tilt_max` (0.39): Maximum attitude rotation from vertical (in radians)
 - `failsafe_land_vel` (-0.2): Emergency landing velocity for soft failsafe (must be negative)
 - `failsafe_output_fatal` (false): Enables all-low output if hard failsafe occurs (default is to disable all outputs)
