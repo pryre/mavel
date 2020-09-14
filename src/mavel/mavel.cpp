@@ -270,14 +270,14 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 
 	bool reference_ok = ( stream_ref_path_ok || stream_ref_tri_ok );
 
-	bool state_ok = stream_state_odom_ok;
+	bool odom_ok = stream_state_odom_ok;
 	bool arm_ok = flight_ready(te.current_real);
 
 	mavros_msgs::AttitudeTarget msg_out;
 	msg_out.orientation.w = 1.0;	//Just to make sure the quaternion is initialized correctly
 
 	if( !control_started_ ) {
-		if( state_ok && arm_ok ) {
+		if( odom_ok && arm_ok ) {
 			ROS_INFO_THROTTLE( 2.0, "Mavel: ready and waiting for input reference");
 			if ( !ref_path_.is_allowing_new_goals() )
 				ref_path_.allow_new_goals(true);
@@ -293,14 +293,14 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 
 		do_failsafe( te, msg_out );
 	} else {
-		if( ( !arm_ok || !state_ok ) && !control_fatal_) {
+		if( ( !arm_ok || !odom_ok ) && !control_fatal_) {
 			//References were ok, but now are in fatal mode
 			control_fatal_ = true;
 
 			reset_control_inputs();
 
-			if(!state_ok) {
-				ROS_ERROR("Mavel: Input reference error!");
+			if(!odom_ok) {
+				ROS_ERROR("Mavel: Input state error!");
 			}
 
 			if( !arm_ok ) {
@@ -309,8 +309,13 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 		}
 
 		if( control_fatal_ ) {
+			ROS_WARN_THROTTLE( 2.0, "Mavel: Failsafe enabled!");
+
 			//We are allowed to reset
-			if(state_ok && arm_ok && param_allow_controller_reset_) {
+			if( param_allow_controller_reset_ &&
+				odom_ok &&
+				( stream_check( stream_state_mav_, te.current_real ) == HEALTH_OK ) &&
+				!stream_state_mav_.data.armed ) {
 				ROS_WARN("Mavel resetting controller");
 
 				//Should have happened already, but just to be safe
@@ -320,8 +325,6 @@ void Mavel::controller_cb( const ros::TimerEvent& te ) {
 				control_started_ = false;
 				control_fatal_ = false;
 			}
-
-			ROS_WARN_THROTTLE( 2.0, "Mavel: Failsafe enabled!");
 
 			do_failsafe( te, msg_out );
 		} else {
