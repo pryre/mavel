@@ -1,29 +1,32 @@
-# Common configuration for the mavel position controller
+# Common configuration for the mavel trajectory controller
 
-# Control
+# Primary Configurations
 control_rate: 25.0
 control_frame: "map"
 use_tracking_control: False
-
-# Path-following options
-contrail:
-  fallback_to_pose: true
-  waypoint_hold_duration: 1.0
-  waypoint_radius: 0.2
-  waypoint_yaw_accuracy: 0.1
-  spline_res_per_sec: 5
-
-throttle_min: 0.0
-throttle_mid: 0.0 # Refer to README.md for instructions on setting 
-throttle_max: 0.9
-
-#uav_mass: 2.035 # Not currently used
+allow_timeout_position: True
+allow_controller_reset: False
 
 # Maximum roll/pitch in radians
 tilt_max: 0.39
+# Trottle Tuning (Refer to README.md for instructions on setting)
+throttle_min: 0.0
+throttle_mid: 0.425224781036
+throttle_max: 0.9
 
 # Emergency Landing Velocity (must be negative!)
 failsafe_land_vel: -0.2
+# Failsafe output (disable to trigger autopilot failsafe instead)
+failsafe_output_on_fatal: False
+
+# Path-following options
+contrail:
+  end_position_accuracy: 0.1
+  end_yaw_accuracy: 0.1
+  spline_res_per_sec: 5
+  use_position_ref: True
+  use_velocity_ref: True
+  use_acceleration_ref: True
 
 # Data Stream
 min_rate:
