@@ -79,12 +79,12 @@ control:
   track:
     x:
       w0: 1.0
-      ki: 0.0
+      ki: 0.1
       min: -2.5
       max: 2.5
     y:
       w0: 1.0
-      ki: 0.0
+      ki: 0.1
       min: -2.5
       max: 2.5
     z:
